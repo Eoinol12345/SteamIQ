@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Steamer Monitor — Late Money Tracker</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    /* ─── Design tokens ─────────────────────────────────────────────── */
+    :root {
+      --bg:          #070c09;
+      --surface:     #0d1610;
+      --surface-2:   #111e14;
+      --border:      #1b2e1e;
+      --border-bright:#2a4530;
+      --green:       #00e05a;
+      --green-dim:   #00703b;
+      --green-glow:  rgba(0, 224, 90, 0.12);
+      --red:         #ff3b30;
+      --red-dim:     #8b1a14;
+      --red-glow:    rgba(255, 59, 48, 0.12);
+      --amber:       #ffcc00;
+      --amber-dim:   rgba(255, 204, 0, 0.15);
+      --text:        #c8e0cc;
+      --text-bright: #e8f5eb;
+      --text-muted:  #4a6b50;
+      --text-dim:    #2e4a32;
+      --accent:      #00e05a;
+      --font-display: 'Barlow Condensed', sans-serif;
+      --font-mono:    'DM Mono', monospace;
+    }
+
+    /* ─── Reset & base ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background:  var(--bg);
+      color:       var(--text);
+      font-family: var(--font-display);
+      font-size:   16px;
+      min-height:  100vh;
+      /* scanline texture */
+      background-image: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.08) 2px,
+        rgba(0,0,0,0.08) 4px
+      );
+    }
+
+    /* ─── Header ────────────────────────────────────────────────────── */
+    .header {
+      background:    var(--surface);
+      border-bottom: 2px solid var(--border-bright);
+      padding:       0 2rem;
+      display:       flex;
+      align-items:   center;
+      justify-content: space-between;
+      height:        60px;
+      position:      sticky;
+      top:           0;
+      z-index:       100;
+      box-shadow:    0 2px 20px rgba(0,0,0,0.5);
+    }
+
+    .logo {
+      display:     flex;
+      align-items: center;
+      gap:         .75rem;
+    }
+
+    .logo-icon {
+      width:            32px;
+      height:           32px;
+      background:       var(--green);
+      clip-path:        polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+      display:          flex;
+      align-items:      center;
+      justify-content:  center;
+      font-size:        14px;
+      color:            var(--bg);
+      font-weight:      900;
+      flex-shrink:      0;
+    }
+
+    .logo h1 {
+      font-family:    var(--font-display);
+      font-size:      1.5rem;
+      font-weight:    900;
+      letter-spacing: .08em;
+      color:          var(--text-bright);
+      text-transform: uppercase;
+    }
+
+    .logo h1 span { color: var(--green); }
+
+    .header-right {
+      display:     flex;
+      align-items: center;
+      gap:         1.5rem;
+    }
+
+    /* LIVE pill */
+    .live-badge {
+      display:        flex;
+      align-items:    center;
+      gap:            .4rem;
+      background:     rgba(0,224,90,.1);
+      border:         1px solid var(--green-dim);
+      border-radius:  4px;
+      padding:        .2rem .6rem;
+      font-family:    var(--font-mono);
+      font-size:      .72rem;
+      color:          var(--green);
+      font-weight:    500;
+      letter-spacing: .08em;
+    }
+
+    .live-dot {
+      width:            7px;
+      height:           7px;
+      background:       var(--green);
+      border-radius:    50%;
+      animation:        pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0,224,90,.6); }
+      50%       { opacity: .7; box-shadow: 0 0 0 5px rgba(0,224,90,0); }
+    }
+
+    .refresh-info {
+      font-family:  var(--font-mono);
+      font-size:    .72rem;
+      color:        var(--text-muted);
+    }
+
+    .refresh-info span {
+      color:       var(--green);
+      font-weight: 500;
+    }
+
+    /* Force update button */
+    .btn-update {
+      background:     transparent;
+      border:         1px solid var(--border-bright);
+      color:          var(--text-muted);
+      padding:        .3rem .8rem;
+      border-radius:  4px;
+      font-family:    var(--font-mono);
+      font-size:      .72rem;
+      cursor:         pointer;
+      transition:     all .2s;
+      letter-spacing: .04em;
+    }
+    .btn-update:hover {
+      border-color: var(--green);
+      color:        var(--green);
+    }
+    .btn-update:active { transform: scale(.97); }
+
+    /* ─── Stats bar ─────────────────────────────────────────────────── */
+    .stats-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: .6rem 2rem;
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      overflow-x: auto;
+    }
+
+    .stat-item {
+      display:     flex;
+      align-items: baseline;
+      gap:         .4rem;
+      white-space: nowrap;
+    }
+
+    .stat-label {
+      font-family:    var(--font-mono);
+      font-size:      .65rem;
+      color:          var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .stat-value {
+      font-family: var(--font-mono);
+      font-size:   1rem;
+      font-weight: 500;
+    }
+
+    .stat-value.green  { color: var(--green); }
+    .stat-value.red    { color: var(--red); }
+    .stat-value.amber  { color: var(--amber); }
+    .stat-value.muted  { color: var(--text); }
+
+    .stat-divider {
+      width:      1px;
+      height:     20px;
+      background: var(--border);
+    }
+
+    /* ─── Main layout ───────────────────────────────────────────────── */
+    .main {
+      padding:    1.5rem 2rem 3rem;
+      max-width:  1600px;
+      margin:     0 auto;
+    }
+
+    .races-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+      gap: 1.25rem;
+    }
+
+    /* ─── Race card ─────────────────────────────────────────────────── */
+    .race-card {
+      background:    var(--surface);
+      border:        1px solid var(--border);
+      border-radius: 6px;
+      overflow:      hidden;
+      transition:    border-color .3s;
+    }
+    .race-card:hover { border-color: var(--border-bright); }
+
+    .race-header {
+      padding:         .75rem 1rem;
+      border-bottom:   1px solid var(--border);
+      display:         flex;
+      align-items:     center;
+      justify-content: space-between;
+      gap:             .75rem;
+    }
+
+    .race-venue {
+      display:     flex;
+      align-items: center;
+      gap:         .5rem;
+    }
+
+    .country-flag {
+      font-size:   .9rem;
+      flex-shrink: 0;
+    }
+
+    .venue-name {
+      font-size:      1.1rem;
+      font-weight:    700;
+      letter-spacing: .04em;
+      color:          var(--text-bright);
+      text-transform: uppercase;
+    }
+
+    .race-meta {
+      font-family: var(--font-mono);
+      font-size:   .65rem;
+      color:       var(--text-muted);
+      margin-top:  .15rem;
+    }
+
+    .race-time-badge {
+      font-family:    var(--font-mono);
+      font-size:      .9rem;
+      font-weight:    500;
+      padding:        .2rem .55rem;
+      border-radius:  4px;
+      white-space:    nowrap;
+      flex-shrink:    0;
+    }
+
+    .badge-imminent {
+      background: rgba(255,204,0,.12);
+      border:     1px solid rgba(255,204,0,.3);
+      color:      var(--amber);
+    }
+
+    .badge-normal {
+      background: rgba(0,224,90,.07);
+      border:     1px solid var(--border);
+      color:      var(--text-muted);
+    }
+
+    .badge-going {
+      background: rgba(255,59,48,.15);
+      border:     1px solid rgba(255,59,48,.4);
+      color:      var(--red);
+      animation:  blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: .5; }
+    }
+
+    /* ─── Runners table ─────────────────────────────────────────────── */
+    .runners-table {
+      width:           100%;
+      border-collapse: collapse;
+    }
+
+    .runners-table th {
+      font-family:    var(--font-mono);
+      font-size:      .6rem;
+      color:          var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding:        .4rem .75rem;
+      text-align:     left;
+      border-bottom:  1px solid var(--border);
+      background:     var(--surface-2);
+      font-weight:    400;
+    }
+
+    .runners-table th.right { text-align: right; }
+
+    .runners-table td {
+      padding:       .55rem .75rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    .runners-table tr:last-child td { border-bottom: none; }
+
+    /* Row status backgrounds */
+    .row-steam { background: rgba(0,224,90,.04); }
+    .row-drift { background: rgba(255,59,48,.04); }
+    .row-smart { background: rgba(255,204,0,.05) !important; }
+
+    /* Traffic light indicator */
+    .tl-cell {
+      width:   28px;
+      padding-right: 0;
+    }
+
+    .tl {
+      width:         10px;
+      height:        10px;
+      border-radius: 50%;
+      display:       inline-block;
+    }
+
+    .tl-green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .tl-red    { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+    .tl-grey   { background: var(--text-dim); }
+
+    /* Horse name */
+    .horse-name {
+      font-family:    var(--font-display);
+      font-size:      .92rem;
+      font-weight:    600;
+      color:          var(--text-bright);
+      letter-spacing: .02em;
+    }
+
+    .smart-badge {
+      display:        inline-block;
+      font-family:    var(--font-mono);
+      font-size:      .55rem;
+      background:     var(--amber-dim);
+      border:         1px solid rgba(255,204,0,.4);
+      color:          var(--amber);
+      border-radius:  3px;
+      padding:        .05rem .35rem;
+      letter-spacing: .05em;
+      margin-left:    .4rem;
+      vertical-align: middle;
+      text-transform: uppercase;
+    }
+
+    .jockey-info {
+      font-family: var(--font-mono);
+      font-size:   .62rem;
+      color:       var(--text-muted);
+      margin-top:  .1rem;
+    }
+
+    /* Odds columns */
+    .odds-open {
+      font-family:    var(--font-mono);
+      font-size:      .75rem;
+      color:          var(--text-muted);
+      text-align:     right;
+      text-decoration: line-through;
+    }
+
+    .odds-current {
+      font-family: var(--font-mono);
+      font-size:   1rem;
+      font-weight: 500;
+      text-align:  right;
+      transition:  color .3s;
+    }
+
+    .odds-steam { color: var(--green); }
+    .odds-drift { color: var(--red); }
+    .odds-neutral { color: var(--text); }
+
+    /* Percentage drop */
+    .pct-cell {
+      font-family: var(--font-mono);
+      font-size:   .78rem;
+      text-align:  right;
+    }
+
+    .pct-steam  { color: var(--green); }
+    .pct-drift  { color: var(--red); }
+    .pct-neutral { color: var(--text-muted); }
+
+    /* Confidence bar */
+    .confidence-cell { min-width: 80px; }
+
+    .conf-bar {
+      height:        4px;
+      background:    var(--border);
+      border-radius: 2px;
+      overflow:      hidden;
+      margin-bottom: .2rem;
+    }
+
+    .conf-fill {
+      height:        100%;
+      border-radius: 2px;
+      transition:    width .6s ease;
+    }
+
+    .conf-fill-high   { background: var(--green); }
+    .conf-fill-mid    { background: var(--amber); }
+    .conf-fill-low    { background: var(--red-dim); }
+
+    .conf-label {
+      font-family:    var(--font-mono);
+      font-size:      .6rem;
+      color:          var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    /* ─── Flash animations (when value changes on refresh) ──────────── */
+    @keyframes flash-green {
+      0%  { background: rgba(0, 224, 90, .25); }
+      100%{ background: transparent; }
+    }
+    @keyframes flash-red {
+      0%  { background: rgba(255, 59, 48, .25); }
+      100%{ background: transparent; }
+    }
+
+    .flash-green-anim { animation: flash-green .8s ease-out; }
+    .flash-red-anim   { animation: flash-red   .8s ease-out; }
+
+    /* ─── Footer ────────────────────────────────────────────────────── */
+    .footer {
+      text-align:  center;
+      padding:     1.5rem 2rem;
+      font-family: var(--font-mono);
+      font-size:   .65rem;
+      color:       var(--text-dim);
+      border-top:  1px solid var(--border);
+      margin-top:  2rem;
+    }
+
+    /* ─── Error toast ───────────────────────────────────────────────── */
+    .toast {
+      position:      fixed;
+      bottom:        1.5rem;
+      right:         1.5rem;
+      background:    var(--surface);
+      border:        1px solid var(--red-dim);
+      color:         var(--red);
+      padding:       .6rem 1rem;
+      border-radius: 6px;
+      font-family:   var(--font-mono);
+      font-size:     .72rem;
+      display:       none;
+      z-index:       200;
+    }
+
+    .toast.visible { display: block; }
+
+    /* ─── Responsive ────────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .header  { padding: 0 1rem; }
+      .main    { padding: 1rem; }
+      .stats-bar { padding: .6rem 1rem; gap: 1rem; }
+      .races-grid { grid-template-columns: 1fr; }
+      .header-right .refresh-info,
+      .header-right .btn-update { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!--  HEADER                                                               -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">▲</div>
+    <h1>STEAMER<span>.</span>MON</h1>
+  </div>
+  <div class="header-right">
+    <span class="refresh-info">Next refresh in <span id="countdown">30</span>s</span>
+    <button class="btn-update" onclick="forceUpdate()">⟳ FORCE UPDATE</button>
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      LIVE
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!--  STATS BAR                                                            -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="stats-bar" id="stats-bar">
+  <div class="stat-item">
+    <span class="stat-label">Runners</span>
+    <span class="stat-value muted" id="stat-runners">{{ summary.total_runners }}</span>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <span class="stat-label">Steamers</span>
+    <span class="stat-value green" id="stat-steamers">{{ summary.steamers }}</span>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <span class="stat-label">Drifters</span>
+    <span class="stat-value red" id="stat-drifters">{{ summary.drifters }}</span>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <span class="stat-label">Smart Money Alerts</span>
+    <span class="stat-value amber" id="stat-smart">{{ summary.smart_money }}</span>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <span class="stat-label">Updated</span>
+    <span class="stat-value muted" style="font-size:.8rem" id="stat-updated">{{ summary.last_updated }}</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!--  RACE GRID                                                            -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<main class="main">
+  <div class="races-grid" id="races-container">
+
+    {% for race in races %}
+    <div class="race-card" id="race-{{ race.id }}">
+
+      <!-- Race header -->
+      <div class="race-header">
+        <div class="race-venue">
+          <span class="country-flag">{{ '🇮🇪' if race.country == 'IRE' else '🇬🇧' }}</span>
+          <div>
+            <div class="venue-name">{{ race.venue }}</div>
+            <div class="race-meta">{{ race.race_name }} · {{ race.distance }} · {{ race.going }}</div>
+          </div>
+        </div>
+        {% if race.minutes_to_off <= 5 %}
+          <span class="race-time-badge badge-going">GOING OFF</span>
+        {% elif race.minutes_to_off <= 15 %}
+          <span class="race-time-badge badge-imminent">{{ race.race_time.strftime('%H:%M') }} ⚡</span>
+        {% else %}
+          <span class="race-time-badge badge-normal">{{ race.race_time.strftime('%H:%M') }}</span>
+        {% endif %}
+      </div>
+
+      <!-- Runners table -->
+      <table class="runners-table">
+        <thead>
+          <tr>
+            <th class="tl-cell"></th>
+            <th>Horse / Jockey</th>
+            <th class="right">Open</th>
+            <th class="right">Now</th>
+            <th class="right">Chg%</th>
+            <th class="right">Conf</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-{{ race.id }}">
+          {% for horse in race.horses | sort(attribute='current_odds') %}
+          {% set pct = horse.pct_drop %}
+          {% set status = horse.status %}
+          <tr class="{% if horse.is_smart_money_alert %}row-smart{% elif status == 'steam' %}row-steam{% elif status == 'drift' %}row-drift{% endif %}"
+              id="row-{{ horse.id }}">
+
+            <!-- Traffic light -->
+            <td class="tl-cell">
+              {% if status == 'steam' %}
+                <span class="tl tl-green"></span>
+              {% elif status == 'drift' %}
+                <span class="tl tl-red"></span>
+              {% else %}
+                <span class="tl tl-grey"></span>
+              {% endif %}
+            </td>
+
+            <!-- Horse name + jockey -->
+            <td>
+              <div class="horse-name" id="name-{{ horse.id }}">
+                {{ horse.name }}
+                {% if horse.is_smart_money_alert %}
+                  <span class="smart-badge">SMART $</span>
+                {% endif %}
+              </div>
+              <div class="jockey-info">{{ horse.jockey }} · {{ horse.trainer }}</div>
+            </td>
+
+            <!-- Opening odds -->
+            <td class="odds-open" id="open-{{ horse.id }}">
+              {{ '%.2f'|format(horse.opening_odds) }}
+            </td>
+
+            <!-- Current odds -->
+            <td class="odds-current odds-{{ status }}" id="odds-{{ horse.id }}">
+              {{ '%.2f'|format(horse.current_odds) }}
+            </td>
+
+            <!-- % change from open -->
+            <td class="pct-cell {% if pct > 0 %}pct-steam{% elif pct < 0 %}pct-drift{% else %}pct-neutral{% endif %}"
+                id="pct-{{ horse.id }}">
+              {% if pct > 0 %}▼ {{ '%.1f'|format(pct) }}%
+              {% elif pct < 0 %}▲ {{ '%.1f'|format(pct|abs) }}%
+              {% else %}—{% endif %}
+            </td>
+
+            <!-- Confidence score -->
+            <td class="confidence-cell" id="conf-{{ horse.id }}">
+              {% set cs = horse.confidence_score %}
+              <div class="conf-bar">
+                <div class="conf-fill {% if cs >= 70 %}conf-fill-high{% elif cs >= 40 %}conf-fill-mid{% else %}conf-fill-low{% endif %}"
+                     style="width: {{ cs }}%"></div>
+              </div>
+              <div class="conf-label">{{ cs }}% · {{ horse.bookie_count }}/5 books</div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
+
+  </div><!-- /races-grid -->
+</main>
+
+<footer class="footer">
+  STEAMER.MON · UK &amp; IRISH RACING · Prices update every 60s · Demo mode active — live scraper falls back to price simulator
+</footer>
+
+<div class="toast" id="error-toast">⚠ Connection error — retrying…</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!--  JAVASCRIPT — auto-refresh without page reload                        -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<script>
+  /* ── State ──────────────────────────────────────────────────────────── */
+  const REFRESH_INTERVAL = 30;          // seconds between auto-refreshes
+  let   countdown  = REFRESH_INTERVAL;
+  let   oddsCache  = {};                // { horseId: currentOdds } — detect changes
+
+  /* ── Seed cache from initial server-render ──────────────────────────── */
+  document.querySelectorAll('[id^="odds-"]').forEach(el => {
+    const id = el.id.replace('odds-', '');
+    oddsCache[id] = parseFloat(el.textContent.trim());
+  });
+
+  /* ── Countdown ticker ───────────────────────────────────────────────── */
+  const countdownEl = document.getElementById('countdown');
+
+  setInterval(() => {
+    countdown--;
+    countdownEl.textContent = countdown;
+    if (countdown <= 0) {
+      countdown = REFRESH_INTERVAL;
+      refreshData();
+    }
+  }, 1000);
+
+  /* ── Fetch & render ─────────────────────────────────────────────────── */
+  async function refreshData() {
+    try {
+      const resp = await fetch('/api/races');
+      if (!resp.ok) throw new Error('Server error');
+      const data = await resp.json();
+      updateStats(data.summary);
+      data.races.forEach(race => updateRace(race));
+      hideError();
+    } catch (err) {
+      console.error('[Steamer] Refresh failed:', err);
+      showError();
+    }
+  }
+
+  async function forceUpdate() {
+    const btn = document.querySelector('.btn-update');
+    btn.textContent = '⟳ UPDATING…';
+    btn.disabled = true;
+    try {
+      const resp = await fetch('/api/simulate', { method: 'POST' });
+      const data = await resp.json();
+      updateStats(data.summary);
+      data.races.forEach(race => updateRace(race));
+      countdown = REFRESH_INTERVAL;
+    } catch(err) {
+      showError();
+    } finally {
+      btn.textContent = '⟳ FORCE UPDATE';
+      btn.disabled = false;
+    }
+  }
+
+  /* ── Update stats bar ───────────────────────────────────────────────── */
+  function updateStats(summary) {
+    setText('stat-runners', summary.total_runners);
+    setText('stat-steamers', summary.steamers);
+    setText('stat-drifters', summary.drifters);
+    setText('stat-smart',    summary.smart_money);
+    setText('stat-updated',  summary.last_updated);
+  }
+
+  /* ── Update a single race card ──────────────────────────────────────── */
+  function updateRace(race) {
+    const tbody = document.getElementById(`tbody-${race.id}`);
+    if (!tbody) return;   // race card not on page yet
+
+    // Update the time badge
+    const card = document.getElementById(`race-${race.id}`);
+    if (card) {
+      const badge = card.querySelector('.race-time-badge');
+      if (badge) {
+        badge.className = 'race-time-badge';
+        if (race.minutes_to_off <= 5) {
+          badge.classList.add('badge-going');
+          badge.textContent = 'GOING OFF';
+        } else if (race.minutes_to_off <= 15) {
+          badge.classList.add('badge-imminent');
+          badge.textContent = `${race.race_time} ⚡`;
+        } else {
+          badge.classList.add('badge-normal');
+          badge.textContent = race.race_time;
+        }
+      }
+    }
+
+    // Sort horses by current odds (favourites first)
+    const sorted = [...race.horses].sort((a, b) => a.current_odds - b.current_odds);
+
+    // Rebuild tbody rows in new order
+    sorted.forEach(horse => {
+      let row = document.getElementById(`row-${horse.id}`);
+
+      if (!row) {
+        // New horse — build from scratch (shouldn't happen in normal flow)
+        row = buildRow(horse);
+        tbody.appendChild(row);
+      } else {
+        updateRow(row, horse);
+      }
+
+      tbody.appendChild(row); // re-orders rows by odds
+    });
+  }
+
+  /* ── Update an existing row ─────────────────────────────────────────── */
+  function updateRow(row, horse) {
+    const prevOdds = oddsCache[horse.id] || horse.current_odds;
+    const newOdds  = horse.current_odds;
+    const changed  = Math.abs(newOdds - prevOdds) > 0.005;
+
+    // Row background class
+    row.className = horse.is_smart_money ? 'row-smart'
+                  : horse.status === 'steam' ? 'row-steam'
+                  : horse.status === 'drift' ? 'row-drift'
+                  : '';
+
+    // Traffic light
+    const tl = row.querySelector('.tl');
+    if (tl) {
+      tl.className = 'tl';
+      tl.classList.add(
+        horse.status === 'steam' ? 'tl-green'
+        : horse.status === 'drift' ? 'tl-red'
+        : 'tl-grey'
+      );
+    }
+
+    // Horse name + smart money badge
+    const nameEl = document.getElementById(`name-${horse.id}`);
+    if (nameEl) {
+      // Preserve only the text node, re-add badge if needed
+      nameEl.textContent = horse.name;
+      if (horse.is_smart_money) {
+        const badge = document.createElement('span');
+        badge.className = 'smart-badge';
+        badge.textContent = 'SMART $';
+        nameEl.appendChild(badge);
+      }
+    }
+
+    // Odds cells
+    const oddsEl = document.getElementById(`odds-${horse.id}`);
+    if (oddsEl) {
+      oddsEl.textContent = horse.current_odds.toFixed(2);
+      oddsEl.className   = `odds-current odds-${horse.status}`;
+
+      if (changed) {
+        const direction = newOdds < prevOdds ? 'green' : 'red';
+        flashEl(oddsEl, direction);
+      }
+    }
+
+    // % change
+    const pctEl = document.getElementById(`pct-${horse.id}`);
+    if (pctEl) {
+      const pct = horse.pct_drop;
+      pctEl.className = `pct-cell ${pct > 0 ? 'pct-steam' : pct < 0 ? 'pct-drift' : 'pct-neutral'}`;
+      if (pct > 0)       pctEl.textContent = `▼ ${pct.toFixed(1)}%`;
+      else if (pct < 0)  pctEl.textContent = `▲ ${Math.abs(pct).toFixed(1)}%`;
+      else               pctEl.textContent = '—';
+    }
+
+    // Confidence bar
+    const confEl = document.getElementById(`conf-${horse.id}`);
+    if (confEl) {
+      const cs  = horse.confidence_score;
+      const fill = confEl.querySelector('.conf-fill');
+      const lbl  = confEl.querySelector('.conf-label');
+      if (fill) {
+        fill.style.width = `${cs}%`;
+        fill.className = `conf-fill ${cs >= 70 ? 'conf-fill-high' : cs >= 40 ? 'conf-fill-mid' : 'conf-fill-low'}`;
+      }
+      if (lbl) lbl.textContent = `${cs}% · ${horse.bookie_count}/5 books`;
+    }
+
+    // Update cache
+    oddsCache[horse.id] = newOdds;
+  }
+
+  /* ── Flash cell animation ───────────────────────────────────────────── */
+  function flashEl(el, direction) {
+    el.classList.remove('flash-green-anim', 'flash-red-anim');
+    void el.offsetWidth; // reflow to restart animation
+    el.classList.add(direction === 'green' ? 'flash-green-anim' : 'flash-red-anim');
+  }
+
+  /* ── Helpers ────────────────────────────────────────────────────────── */
+  function setText(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  }
+
+  function showError() {
+    document.getElementById('error-toast').classList.add('visible');
+    setTimeout(() => document.getElementById('error-toast').classList.remove('visible'), 4000);
+  }
+
+  function hideError() {
+    document.getElementById('error-toast').classList.remove('visible');
+  }
+
+  /* ── Kick off the first refresh immediately on load ─────────────────── */
+  // (The Jinja2 render already shows initial data, so first fetch after 30s)
+  console.log('[Steamer] Dashboard ready. Auto-refresh every', REFRESH_INTERVAL, 'seconds.');
+</script>
+
+</body>
+</html>
