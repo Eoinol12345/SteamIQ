@@ -3,871 +3,1053 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Steamer Monitor — Late Money Tracker</title>
-
+  <title>SteamIQ — Smart Money Monitor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-
   <style>
-    /* ─── Design tokens ─────────────────────────────────────────────── */
-    :root {
-      --bg:          #070c09;
-      --surface:     #0d1610;
-      --surface-2:   #111e14;
-      --border:      #1b2e1e;
-      --border-bright:#2a4530;
-      --green:       #00e05a;
-      --green-dim:   #00703b;
-      --green-glow:  rgba(0, 224, 90, 0.12);
-      --red:         #ff3b30;
-      --red-dim:     #8b1a14;
-      --red-glow:    rgba(255, 59, 48, 0.12);
-      --amber:       #ffcc00;
-      --amber-dim:   rgba(255, 204, 0, 0.15);
-      --text:        #c8e0cc;
-      --text-bright: #e8f5eb;
-      --text-muted:  #4a6b50;
-      --text-dim:    #2e4a32;
-      --accent:      #00e05a;
-      --font-display: 'Barlow Condensed', sans-serif;
-      --font-mono:    'DM Mono', monospace;
+    :root{
+      --bg:#070c09;--surface:#0d1610;--surface-2:#111e14;
+      --border:#1b2e1e;--border-b:#2a4530;
+      --green:#00e05a;--green-d:#00703b;
+      --red:#ff3b30;--red-d:#8b1a14;
+      --amber:#ffcc00;--amber-d:rgba(255,204,0,.15);
+      --blue:#3b9eff;--blue-d:rgba(59,158,255,.12);
+      --purple:#b57bff;
+      --text:#c8e0cc;--text-b:#e8f5eb;--text-m:#4a6b50;--text-d:#2e4a32;
+      --fd:'Barlow Condensed',sans-serif;--fm:'DM Mono',monospace;
     }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:var(--fd);font-size:16px;min-height:100vh;
+      background-image:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.08) 2px,rgba(0,0,0,.08) 4px)}
 
-    /* ─── Reset & base ──────────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
+    /* Header */
+    .hdr{background:var(--surface);border-bottom:2px solid var(--border-b);padding:0 1.5rem;
+      display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:200}
+    .logo{display:flex;align-items:center;gap:.6rem}
+    .logo-icon{width:28px;height:28px;background:var(--green);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
+      display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--bg);font-weight:900}
+    .logo h1{font-family:var(--fd);font-size:1.4rem;font-weight:900;letter-spacing:.08em;color:var(--text-b);text-transform:uppercase}
+    .logo h1 span{color:var(--green)}
+    .hdr-right{display:flex;align-items:center;gap:.8rem}
+    .live-badge{display:flex;align-items:center;gap:.35rem;background:rgba(0,224,90,.1);border:1px solid var(--green-d);
+      border-radius:4px;padding:.18rem .5rem;font-family:var(--fm);font-size:.65rem;color:var(--green);letter-spacing:.08em}
+    .live-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:pulse 1.2s ease-in-out infinite}
+    @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,224,90,.6)}50%{opacity:.7;box-shadow:0 0 0 5px rgba(0,224,90,0)}}
+    .refresh-info{font-family:var(--fm);font-size:.65rem;color:var(--text-m)}
+    .refresh-info span{color:var(--green);font-weight:500}
+    .btn{background:transparent;border:1px solid var(--border-b);color:var(--text-m);padding:.25rem .6rem;
+      border-radius:4px;font-family:var(--fm);font-size:.65rem;cursor:pointer;transition:all .2s;letter-spacing:.04em}
+    .btn:hover{border-color:var(--green);color:var(--green)}
+    .btn:active{transform:scale(.97)}
 
-    body {
-      background:  var(--bg);
-      color:       var(--text);
-      font-family: var(--font-display);
-      font-size:   16px;
-      min-height:  100vh;
-      /* scanline texture */
-      background-image: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 2px,
-        rgba(0,0,0,0.08) 2px,
-        rgba(0,0,0,0.08) 4px
-      );
-    }
+    /* Stats bar */
+    .stats-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:.45rem 1.5rem;
+      display:flex;gap:1.4rem;align-items:center;overflow-x:auto;flex-wrap:nowrap}
+    .si{display:flex;align-items:baseline;gap:.3rem;white-space:nowrap}
+    .sl{font-family:var(--fm);font-size:.58rem;color:var(--text-m);text-transform:uppercase;letter-spacing:.06em}
+    .sv{font-family:var(--fm);font-size:.9rem;font-weight:500}
+    .sg{color:var(--green)}.sr{color:var(--red)}.sa{color:var(--amber)}.sb{color:var(--blue)}.sp{color:var(--purple)}.sm{color:var(--text)}
+    .sd{width:1px;height:16px;background:var(--border)}
 
-    /* ─── Header ────────────────────────────────────────────────────── */
-    .header {
-      background:    var(--surface);
-      border-bottom: 2px solid var(--border-bright);
-      padding:       0 2rem;
-      display:       flex;
-      align-items:   center;
-      justify-content: space-between;
-      height:        60px;
-      position:      sticky;
-      top:           0;
-      z-index:       100;
-      box-shadow:    0 2px 20px rgba(0,0,0,0.5);
-    }
+    /* Tab nav */
+    .tab-nav{background:var(--surface-2);border-bottom:1px solid var(--border);
+      display:flex;overflow-x:auto;padding:0 1.5rem}
+    .tab-btn{font-family:var(--fm);font-size:.68rem;color:var(--text-m);padding:.55rem .9rem;
+      border:none;border-bottom:2px solid transparent;background:transparent;cursor:pointer;
+      text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;transition:all .2s}
+    .tab-btn:hover{color:var(--text)}
+    .tab-btn.active{color:var(--green);border-bottom-color:var(--green)}
 
-    .logo {
-      display:     flex;
-      align-items: center;
-      gap:         .75rem;
-    }
+    /* Main */
+    .main{padding:1.1rem 1.5rem 3rem;max-width:1600px;margin:0 auto}
+    .tp{display:none}.tp.active{display:block}
 
-    .logo-icon {
-      width:            32px;
-      height:           32px;
-      background:       var(--green);
-      clip-path:        polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-      display:          flex;
-      align-items:      center;
-      justify-content:  center;
-      font-size:        14px;
-      color:            var(--bg);
-      font-weight:      900;
-      flex-shrink:      0;
-    }
+    /* Race grid */
+    .races-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));gap:1rem}
+    .race-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;transition:border-color .3s}
+    .race-card:hover{border-color:var(--border-b)}
+    .rt-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%}
+    .race-hdr{padding:.6rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+    .venue-name{font-size:1rem;font-weight:700;letter-spacing:.04em;color:var(--text-b);text-transform:uppercase}
+    .race-meta{font-family:var(--fm);font-size:.58rem;color:var(--text-m);margin-top:.08rem}
+    .race-badge{font-family:var(--fm);font-size:.78rem;font-weight:500;padding:.16rem .45rem;border-radius:4px;white-space:nowrap;flex-shrink:0}
+    .badge-going{background:rgba(255,59,48,.15);border:1px solid rgba(255,59,48,.4);color:var(--red);animation:blink 1s step-end infinite}
+    .badge-imm{background:rgba(255,204,0,.12);border:1px solid rgba(255,204,0,.3);color:var(--amber)}
+    .badge-norm{background:rgba(0,224,90,.07);border:1px solid var(--border);color:var(--text-m)}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.5}}
 
-    .logo h1 {
-      font-family:    var(--font-display);
-      font-size:      1.5rem;
-      font-weight:    900;
-      letter-spacing: .08em;
-      color:          var(--text-bright);
-      text-transform: uppercase;
-    }
+    /* Runners table */
+    .rt{width:100%;border-collapse:collapse;min-width:750px}
+    .rt th{font-family:var(--fm);font-size:.54rem;color:var(--text-m);text-transform:uppercase;
+      letter-spacing:.06em;padding:.32rem .5rem;text-align:left;border-bottom:1px solid var(--border);
+      background:var(--surface-2);font-weight:400}
+    .rt th.r{text-align:right}
+    .rt td{padding:.46rem .5rem;border-bottom:1px solid var(--border);vertical-align:middle}
+    .rt tr:last-child td{border-bottom:none}
+    .row-steam{background:rgba(0,224,90,.04)}.row-drift{background:rgba(255,59,48,.04)}
+    .row-smart{background:rgba(255,204,0,.05)!important}.row-spike{background:rgba(59,158,255,.04)}
+    .row-rev{background:rgba(181,123,255,.04)}
 
-    .logo h1 span { color: var(--green); }
+    .tl{width:8px;height:8px;border-radius:50%;display:inline-block}
+    .tl-g{background:var(--green);box-shadow:0 0 5px var(--green)}
+    .tl-r{background:var(--red);box-shadow:0 0 5px var(--red)}
+    .tl-grey{background:var(--text-d)}
 
-    .header-right {
-      display:     flex;
-      align-items: center;
-      gap:         1.5rem;
-    }
+    .hname{font-family:var(--fd);font-size:.84rem;font-weight:600;color:var(--text-b);letter-spacing:.02em}
+    .hjinfo{font-family:var(--fm);font-size:.55rem;color:var(--text-m);margin-top:.06rem}
+    .bdg{display:inline-block;font-family:var(--fm);font-size:.5rem;border-radius:3px;
+      padding:.03rem .28rem;letter-spacing:.05em;margin-left:.28rem;vertical-align:middle;text-transform:uppercase}
+    .bdg-sm{background:var(--amber-d);border:1px solid rgba(255,204,0,.4);color:var(--amber)}
+    .bdg-fk{background:rgba(255,59,48,.12);border:1px solid rgba(255,59,48,.35);color:var(--red)}
+    .bdg-sp{background:var(--blue-d);border:1px solid rgba(59,158,255,.35);color:var(--blue)}
+    .bdg-rv{background:rgba(181,123,255,.12);border:1px solid rgba(181,123,255,.35);color:var(--purple)}
 
-    /* LIVE pill */
-    .live-badge {
-      display:        flex;
-      align-items:    center;
-      gap:            .4rem;
-      background:     rgba(0,224,90,.1);
-      border:         1px solid var(--green-dim);
-      border-radius:  4px;
-      padding:        .2rem .6rem;
-      font-family:    var(--font-mono);
-      font-size:      .72rem;
-      color:          var(--green);
-      font-weight:    500;
-      letter-spacing: .08em;
-    }
+    .odds-open{font-family:var(--fm);font-size:.68rem;color:var(--text-m);text-align:right;text-decoration:line-through}
+    .odds-cur{font-family:var(--fm);font-size:.9rem;font-weight:500;text-align:right;transition:color .3s}
+    .odds-steam{color:var(--green)}.odds-drift{color:var(--red)}.odds-neutral{color:var(--text)}
+    .pct-cell{font-family:var(--fm);font-size:.7rem;text-align:right}
+    .pct-s{color:var(--green)}.pct-d{color:var(--red)}.pct-n{color:var(--text-m)}
 
-    .live-dot {
-      width:            7px;
-      height:           7px;
-      background:       var(--green);
-      border-radius:    50%;
-      animation:        pulse 1.2s ease-in-out infinite;
-    }
+    /* Quality index badge */
+    .qi{font-family:var(--fm);font-size:.72rem;font-weight:500;padding:.12rem .38rem;border-radius:3px;text-align:center;min-width:28px}
+    .qi-ap{background:rgba(0,224,90,.18);color:var(--green);border:1px solid var(--green-d)}
+    .qi-a{background:rgba(0,224,90,.1);color:var(--green);border:1px solid var(--green-d)}
+    .qi-b{background:rgba(255,204,0,.12);color:var(--amber);border:1px solid rgba(255,204,0,.3)}
+    .qi-c{background:rgba(59,158,255,.1);color:var(--blue);border:1px solid rgba(59,158,255,.25)}
+    .qi-d{background:var(--border);color:var(--text-m);border:1px solid var(--border)}
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0,224,90,.6); }
-      50%       { opacity: .7; box-shadow: 0 0 0 5px rgba(0,224,90,0); }
-    }
-
-    .refresh-info {
-      font-family:  var(--font-mono);
-      font-size:    .72rem;
-      color:        var(--text-muted);
-    }
-
-    .refresh-info span {
-      color:       var(--green);
-      font-weight: 500;
-    }
-
-    /* Force update button */
-    .btn-update {
-      background:     transparent;
-      border:         1px solid var(--border-bright);
-      color:          var(--text-muted);
-      padding:        .3rem .8rem;
-      border-radius:  4px;
-      font-family:    var(--font-mono);
-      font-size:      .72rem;
-      cursor:         pointer;
-      transition:     all .2s;
-      letter-spacing: .04em;
-    }
-    .btn-update:hover {
-      border-color: var(--green);
-      color:        var(--green);
-    }
-    .btn-update:active { transform: scale(.97); }
-
-    /* ─── Stats bar ─────────────────────────────────────────────────── */
-    .stats-bar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: .6rem 2rem;
-      display: flex;
-      gap: 2rem;
-      align-items: center;
-      overflow-x: auto;
-    }
-
-    .stat-item {
-      display:     flex;
-      align-items: baseline;
-      gap:         .4rem;
-      white-space: nowrap;
-    }
-
-    .stat-label {
-      font-family:    var(--font-mono);
-      font-size:      .65rem;
-      color:          var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: .06em;
-    }
-
-    .stat-value {
-      font-family: var(--font-mono);
-      font-size:   1rem;
-      font-weight: 500;
-    }
-
-    .stat-value.green  { color: var(--green); }
-    .stat-value.red    { color: var(--red); }
-    .stat-value.amber  { color: var(--amber); }
-    .stat-value.muted  { color: var(--text); }
-
-    .stat-divider {
-      width:      1px;
-      height:     20px;
-      background: var(--border);
-    }
-
-    /* ─── Main layout ───────────────────────────────────────────────── */
-    .main {
-      padding:    1.5rem 2rem 3rem;
-      max-width:  1600px;
-      margin:     0 auto;
-    }
-
-    .races-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
-      gap: 1.25rem;
-    }
-
-    /* ─── Race card ─────────────────────────────────────────────────── */
-    .race-card {
-      background:    var(--surface);
-      border:        1px solid var(--border);
-      border-radius: 6px;
-      overflow:      hidden;
-      transition:    border-color .3s;
-    }
-    .race-card:hover { border-color: var(--border-bright); }
-
-    .race-header {
-      padding:         .75rem 1rem;
-      border-bottom:   1px solid var(--border);
-      display:         flex;
-      align-items:     center;
-      justify-content: space-between;
-      gap:             .75rem;
-    }
-
-    .race-venue {
-      display:     flex;
-      align-items: center;
-      gap:         .5rem;
-    }
-
-    .country-flag {
-      font-size:   .9rem;
-      flex-shrink: 0;
-    }
-
-    .venue-name {
-      font-size:      1.1rem;
-      font-weight:    700;
-      letter-spacing: .04em;
-      color:          var(--text-bright);
-      text-transform: uppercase;
-    }
-
-    .race-meta {
-      font-family: var(--font-mono);
-      font-size:   .65rem;
-      color:       var(--text-muted);
-      margin-top:  .15rem;
-    }
-
-    .race-time-badge {
-      font-family:    var(--font-mono);
-      font-size:      .9rem;
-      font-weight:    500;
-      padding:        .2rem .55rem;
-      border-radius:  4px;
-      white-space:    nowrap;
-      flex-shrink:    0;
-    }
-
-    .badge-imminent {
-      background: rgba(255,204,0,.12);
-      border:     1px solid rgba(255,204,0,.3);
-      color:      var(--amber);
-    }
-
-    .badge-normal {
-      background: rgba(0,224,90,.07);
-      border:     1px solid var(--border);
-      color:      var(--text-muted);
-    }
-
-    .badge-going {
-      background: rgba(255,59,48,.15);
-      border:     1px solid rgba(255,59,48,.4);
-      color:      var(--red);
-      animation:  blink 1s step-end infinite;
-    }
-
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: .5; }
-    }
-
-    /* ─── Runners table ─────────────────────────────────────────────── */
-    .runners-table {
-      width:           100%;
-      border-collapse: collapse;
-    }
-
-    .runners-table th {
-      font-family:    var(--font-mono);
-      font-size:      .6rem;
-      color:          var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      padding:        .4rem .75rem;
-      text-align:     left;
-      border-bottom:  1px solid var(--border);
-      background:     var(--surface-2);
-      font-weight:    400;
-    }
-
-    .runners-table th.right { text-align: right; }
-
-    .runners-table td {
-      padding:       .55rem .75rem;
-      border-bottom: 1px solid var(--border);
-      vertical-align: middle;
-    }
-
-    .runners-table tr:last-child td { border-bottom: none; }
-
-    /* Row status backgrounds */
-    .row-steam { background: rgba(0,224,90,.04); }
-    .row-drift { background: rgba(255,59,48,.04); }
-    .row-smart { background: rgba(255,204,0,.05) !important; }
-
-    /* Traffic light indicator */
-    .tl-cell {
-      width:   28px;
-      padding-right: 0;
-    }
-
-    .tl {
-      width:         10px;
-      height:        10px;
-      border-radius: 50%;
-      display:       inline-block;
-    }
-
-    .tl-green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
-    .tl-red    { background: var(--red);   box-shadow: 0 0 6px var(--red); }
-    .tl-grey   { background: var(--text-dim); }
-
-    /* Horse name */
-    .horse-name {
-      font-family:    var(--font-display);
-      font-size:      .92rem;
-      font-weight:    600;
-      color:          var(--text-bright);
-      letter-spacing: .02em;
-    }
-
-    .smart-badge {
-      display:        inline-block;
-      font-family:    var(--font-mono);
-      font-size:      .55rem;
-      background:     var(--amber-dim);
-      border:         1px solid rgba(255,204,0,.4);
-      color:          var(--amber);
-      border-radius:  3px;
-      padding:        .05rem .35rem;
-      letter-spacing: .05em;
-      margin-left:    .4rem;
-      vertical-align: middle;
-      text-transform: uppercase;
-    }
-
-    .jockey-info {
-      font-family: var(--font-mono);
-      font-size:   .62rem;
-      color:       var(--text-muted);
-      margin-top:  .1rem;
-    }
-
-    /* Odds columns */
-    .odds-open {
-      font-family:    var(--font-mono);
-      font-size:      .75rem;
-      color:          var(--text-muted);
-      text-align:     right;
-      text-decoration: line-through;
-    }
-
-    .odds-current {
-      font-family: var(--font-mono);
-      font-size:   1rem;
-      font-weight: 500;
-      text-align:  right;
-      transition:  color .3s;
-    }
-
-    .odds-steam { color: var(--green); }
-    .odds-drift { color: var(--red); }
-    .odds-neutral { color: var(--text); }
-
-    /* Percentage drop */
-    .pct-cell {
-      font-family: var(--font-mono);
-      font-size:   .78rem;
-      text-align:  right;
-    }
-
-    .pct-steam  { color: var(--green); }
-    .pct-drift  { color: var(--red); }
-    .pct-neutral { color: var(--text-muted); }
+    /* Edge badge */
+    .edge-badge{font-family:var(--fm);font-size:.68rem;font-weight:500;padding:.12rem .38rem;border-radius:3px;text-align:center;min-width:30px}
+    .edge-hot{background:rgba(0,224,90,.15);color:var(--green);border:1px solid var(--green-d)}
+    .edge-warm{background:rgba(255,204,0,.12);color:var(--amber);border:1px solid rgba(255,204,0,.3)}
+    .edge-cold{background:var(--border);color:var(--text-m);border:1px solid var(--border)}
 
     /* Confidence bar */
-    .confidence-cell { min-width: 80px; }
+    .conf-wrap{min-width:65px}
+    .conf-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:.12rem}
+    .conf-fill{height:100%;border-radius:2px;transition:width .5s}
+    .cf-hi{background:var(--green)}.cf-mid{background:var(--amber)}.cf-lo{background:var(--red-d)}
+    .conf-lbl{font-family:var(--fm);font-size:.54rem;color:var(--text-m)}
 
-    .conf-bar {
-      height:        4px;
-      background:    var(--border);
-      border-radius: 2px;
-      overflow:      hidden;
-      margin-bottom: .2rem;
-    }
+    /* WOM bar */
+    .wom-wrap{min-width:65px}
+    .wom-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:.12rem;display:flex}
+    .wom-back{height:100%;background:var(--green)}.wom-lay{height:100%;background:var(--red)}
+    .wom-lbl{font-family:var(--fm);font-size:.52rem;color:var(--text-m);display:flex;justify-content:space-between}
 
-    .conf-fill {
-      height:        100%;
-      border-radius: 2px;
-      transition:    width .6s ease;
-    }
+    /* Sparkline */
+    .sparkline{width:55px;height:22px}
 
-    .conf-fill-high   { background: var(--green); }
-    .conf-fill-mid    { background: var(--amber); }
-    .conf-fill-low    { background: var(--red-dim); }
+    /* Vol cell */
+    .vol-cell{font-family:var(--fm);font-size:.6rem;text-align:right;white-space:nowrap}
+    .vol-hi{color:var(--blue)}.vol-n{color:var(--text-m)}
 
-    .conf-label {
-      font-family:    var(--font-mono);
-      font-size:      .6rem;
-      color:          var(--text-muted);
-      text-transform: uppercase;
-    }
+    /* EV cell */
+    .ev-pos{font-family:var(--fm);font-size:.62rem;color:var(--green);text-align:right}
+    .ev-neg{font-family:var(--fm);font-size:.62rem;color:var(--red);text-align:right}
+    .ev-neu{font-family:var(--fm);font-size:.62rem;color:var(--text-m);text-align:right}
 
-    /* ─── Flash animations (when value changes on refresh) ──────────── */
-    @keyframes flash-green {
-      0%  { background: rgba(0, 224, 90, .25); }
-      100%{ background: transparent; }
-    }
-    @keyframes flash-red {
-      0%  { background: rgba(255, 59, 48, .25); }
-      100%{ background: transparent; }
-    }
+    /* Flash */
+    @keyframes fg{0%{background:rgba(0,224,90,.25)}100%{background:transparent}}
+    @keyframes fr{0%{background:rgba(255,59,48,.25)}100%{background:transparent}}
+    .fg{animation:fg .8s ease-out}.fr{animation:fr .8s ease-out}
 
-    .flash-green-anim { animation: flash-green .8s ease-out; }
-    .flash-red-anim   { animation: flash-red   .8s ease-out; }
+    /* ── Generic panels ── */
+    .panel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:.9rem}
+    .panel-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:1rem;position:relative;overflow:hidden}
+    .panel-card-top{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--green)}
+    .pc-title{font-size:1.05rem;font-weight:700;color:var(--text-b);letter-spacing:.03em;margin-bottom:.2rem}
+    .pc-sub{font-family:var(--fm);font-size:.6rem;color:var(--text-m);margin-bottom:.6rem}
+    .pc-stats{display:flex;gap:.8rem;flex-wrap:wrap;font-family:var(--fm);font-size:.64rem}
+    .ps-g{color:var(--green)}.ps-a{color:var(--amber)}.ps-r{color:var(--red)}.ps-m{color:var(--text-m)}.ps-b{color:var(--blue)}
 
-    /* ─── Footer ────────────────────────────────────────────────────── */
-    .footer {
-      text-align:  center;
-      padding:     1.5rem 2rem;
-      font-family: var(--font-mono);
-      font-size:   .65rem;
-      color:       var(--text-dim);
-      border-top:  1px solid var(--border);
-      margin-top:  2rem;
-    }
+    /* ── Radar ── */
+    .radar-edge{position:absolute;top:.75rem;right:.85rem;font-family:var(--fm);font-size:1rem;font-weight:500;color:var(--green)}
+    .radar-odds{display:flex;align-items:center;gap:.45rem;margin-bottom:.45rem}
+    .radar-open{font-family:var(--fm);font-size:.78rem;color:var(--text-m);text-decoration:line-through}
+    .radar-cur{font-family:var(--fm);font-size:1.25rem;font-weight:500;color:var(--green)}
+    .radar-fake{font-family:var(--fm);font-size:.58rem;color:var(--red);margin-top:.35rem}
+    .radar-empty{font-family:var(--fm);font-size:.78rem;color:var(--text-m);text-align:center;padding:3rem}
 
-    /* ─── Error toast ───────────────────────────────────────────────── */
-    .toast {
-      position:      fixed;
-      bottom:        1.5rem;
-      right:         1.5rem;
-      background:    var(--surface);
-      border:        1px solid var(--red-dim);
-      color:         var(--red);
-      padding:       .6rem 1rem;
-      border-radius: 6px;
-      font-family:   var(--font-mono);
-      font-size:     .72rem;
-      display:       none;
-      z-index:       200;
-    }
+    /* ── Heatmap ── */
+    .hm-race{margin-bottom:1.1rem;background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+    .hm-hdr{padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .hm-title{font-size:.95rem;font-weight:700;color:var(--text-b);letter-spacing:.03em}
+    .hm-cluster{font-family:var(--fm);font-size:.62rem;color:var(--amber)}
+    .hm-grid{display:flex;flex-wrap:wrap;gap:.35rem;padding:.65rem 1rem}
+    .hm-cell{display:flex;flex-direction:column;align-items:center;padding:.35rem .55rem;border-radius:4px;min-width:85px;cursor:default;transition:transform .2s}
+    .hm-cell:hover{transform:scale(1.04)}
+    .hm-hot{background:rgba(0,224,90,.18);border:1px solid var(--green-d)}
+    .hm-warm{background:rgba(255,204,0,.12);border:1px solid rgba(255,204,0,.3)}
+    .hm-mild{background:rgba(59,158,255,.1);border:1px solid rgba(59,158,255,.25)}
+    .hm-flat{background:var(--surface-2);border:1px solid var(--border)}
+    .hm-drift{background:rgba(255,59,48,.1);border:1px solid rgba(255,59,48,.3)}
+    .hm-name{font-size:.74rem;font-weight:600;color:var(--text-b);text-align:center;margin-bottom:.15rem}
+    .hm-pct{font-family:var(--fm);font-size:.64rem;font-weight:500}
+    .hm-pct-hot{color:var(--green)}.hm-pct-warm{color:var(--amber)}.hm-pct-mild{color:var(--blue)}
+    .hm-pct-flat{color:var(--text-m)}.hm-pct-drift{color:var(--red)}
+    .hm-qi{font-family:var(--fm);font-size:.52rem;color:var(--text-m)}
 
-    .toast.visible { display: block; }
+    /* ── Profiles ── */
+    .profiles-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem}
+    @media(max-width:700px){.profiles-grid{grid-template-columns:1fr}}
+    .profile-section{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+    .profile-hdr{padding:.55rem 1rem;border-bottom:1px solid var(--border);font-size:.95rem;font-weight:700;color:var(--text-b);letter-spacing:.04em;text-transform:uppercase}
+    .profile-row{display:flex;align-items:center;padding:.5rem 1rem;border-bottom:1px solid var(--border);gap:.7rem}
+    .profile-row:last-child{border-bottom:none}
+    .pr-rank{font-family:var(--fm);font-size:.62rem;color:var(--text-m);width:14px;text-align:right}
+    .pr-name{font-size:.84rem;font-weight:600;color:var(--text-b);flex:1;letter-spacing:.02em}
+    .pr-stats{display:flex;gap:.7rem;font-family:var(--fm);font-size:.6rem}
+    .pr-bar{height:2px;background:var(--border);margin-top:.2rem;border-radius:1px;overflow:hidden}
+    .pr-bar-fill{height:100%;background:var(--green);border-radius:1px}
 
-    /* ─── Responsive ────────────────────────────────────────────────── */
-    @media (max-width: 600px) {
-      .header  { padding: 0 1rem; }
-      .main    { padding: 1rem; }
-      .stats-bar { padding: .6rem 1rem; gap: 1rem; }
-      .races-grid { grid-template-columns: 1fr; }
-      .header-right .refresh-info,
-      .header-right .btn-update { display: none; }
+    /* ── Daily Report ── */
+    .report-sum{display:flex;gap:1rem;margin-bottom:.9rem;flex-wrap:wrap}
+    .rs{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.6rem 1rem;text-align:center;flex:1;min-width:90px}
+    .rs-val{font-family:var(--fm);font-size:1.5rem;font-weight:500}
+    .rs-lbl{font-family:var(--fm);font-size:.58rem;color:var(--text-m);text-transform:uppercase;letter-spacing:.06em}
+    .rep-table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+    .rep-table th{font-family:var(--fm);font-size:.56rem;color:var(--text-m);text-transform:uppercase;
+      letter-spacing:.06em;padding:.38rem .75rem;text-align:left;border-bottom:1px solid var(--border);background:var(--surface-2)}
+    .rep-table td{padding:.5rem .75rem;border-bottom:1px solid var(--border);font-family:var(--fm);font-size:.68rem}
+    .rep-table tr:last-child td{border-bottom:none}
+    .r-won{color:var(--green)}.r-placed{color:var(--amber)}.r-lost{color:var(--red)}.r-pending{color:var(--text-m)}
+
+    /* ── Filters ── */
+    .filter-bar{display:flex;gap:.7rem;flex-wrap:wrap;margin-bottom:1.1rem;background:var(--surface);
+      border:1px solid var(--border);border-radius:6px;padding:.75rem 1rem;align-items:flex-end}
+    .fg-group{display:flex;flex-direction:column;gap:.2rem}
+    .fg-label{font-family:var(--fm);font-size:.58rem;color:var(--text-m);text-transform:uppercase;letter-spacing:.06em}
+    .fg-input{background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+      font-family:var(--fm);font-size:.68rem;padding:.28rem .5rem;border-radius:4px;width:90px}
+    .fg-input:focus{outline:none;border-color:var(--green)}
+    .fg-select{background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+      font-family:var(--fm);font-size:.68rem;padding:.28rem .5rem;border-radius:4px}
+    .fg-check{display:flex;align-items:center;gap:.3rem;font-family:var(--fm);font-size:.65rem;color:var(--text);cursor:pointer}
+    .filter-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:.75rem}
+    .fc{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.75rem .9rem}
+    .fc-name{font-size:.92rem;font-weight:700;color:var(--text-b);letter-spacing:.02em}
+    .fc-venue{font-family:var(--fm);font-size:.58rem;color:var(--text-m);margin-bottom:.45rem}
+    .fc-stats{display:flex;gap:.9rem;font-family:var(--fm);font-size:.62rem;flex-wrap:wrap}
+    .fc-edge{float:right;font-family:var(--fm);font-size:1rem;font-weight:500}
+
+    /* ── Strategy ── */
+    .strategy-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.9rem;margin-bottom:1.5rem}
+    .strat-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:1rem;position:relative}
+    .strat-card.positive{border-color:var(--green-d)}
+    .strat-card.negative{border-color:var(--red-d)}
+    .strat-tag{font-family:var(--fm);font-size:.6rem;color:var(--text-m);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.3rem}
+    .strat-roi{font-size:2rem;font-weight:900;font-family:var(--fm);margin-bottom:.1rem}
+    .strat-roi.pos{color:var(--green)}.strat-roi.neg{color:var(--red)}
+    .strat-stats{display:flex;gap:.8rem;font-family:var(--fm);font-size:.62rem;flex-wrap:wrap;margin-top:.4rem}
+    .strat-meta{position:absolute;top:.8rem;right:.9rem;font-family:var(--fm);font-size:.58rem;color:var(--text-m);text-align:right}
+
+    /* Recent bets table */
+    .bets-table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+    .bets-table th{font-family:var(--fm);font-size:.54rem;color:var(--text-m);text-transform:uppercase;
+      letter-spacing:.06em;padding:.35rem .7rem;text-align:left;border-bottom:1px solid var(--border);background:var(--surface-2)}
+    .bets-table td{padding:.46rem .7rem;border-bottom:1px solid var(--border);font-family:var(--fm);font-size:.65rem}
+    .bets-table tr:last-child td{border-bottom:none}
+
+    /* ── Backtest ── */
+    .bt-controls{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.9rem 1rem;margin-bottom:1.1rem;display:flex;gap:.8rem;flex-wrap:wrap;align-items:flex-end}
+    .bt-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.8rem;margin-bottom:1.2rem}
+    .bt-stat{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.7rem 1rem;text-align:center}
+    .bt-val{font-family:var(--fm);font-size:1.4rem;font-weight:500}
+    .bt-lbl{font-family:var(--fm);font-size:.58rem;color:var(--text-m);text-transform:uppercase;letter-spacing:.06em}
+    .curve-wrap{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:1rem}
+    .curve-title{font-family:var(--fm);font-size:.62rem;color:var(--text-m);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.6rem}
+
+    /* ── Clusters ── */
+    .cluster-card{background:var(--surface);border:2px solid var(--amber-d);border-radius:6px;padding:1rem;margin-bottom:.9rem}
+    .cluster-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem}
+    .cluster-venue{font-size:1.05rem;font-weight:700;color:var(--text-b);letter-spacing:.04em}
+    .cluster-signal{font-family:var(--fm);font-size:.7rem;color:var(--amber);font-weight:500}
+    .cluster-horses{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem}
+    .ch-pill{background:rgba(0,224,90,.08);border:1px solid var(--green-d);border-radius:4px;padding:.3rem .6rem;
+      font-family:var(--fm);font-size:.62rem;color:var(--text-b)}
+    .ch-pill strong{color:var(--green)}
+
+    /* ── Reversals ── */
+    .rev-card{background:var(--surface);border:1px solid rgba(181,123,255,.3);border-radius:6px;padding:.9rem 1rem;margin-bottom:.8rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+    .rev-horse{font-size:1rem;font-weight:700;color:var(--text-b);letter-spacing:.02em;min-width:160px}
+    .rev-venue{font-family:var(--fm);font-size:.6rem;color:var(--text-m)}
+    .rev-odds{display:flex;align-items:center;gap:.4rem;font-family:var(--fm)}
+    .rev-open{font-size:.78rem;color:var(--text-m);text-decoration:line-through}
+    .rev-cur{font-size:1.1rem;font-weight:500;color:var(--green)}
+    .rev-stats{display:flex;gap:.8rem;font-family:var(--fm);font-size:.62rem;flex-wrap:wrap}
+    .rev-qi{margin-left:auto;font-family:var(--fm);font-size:1.1rem;font-weight:500}
+
+    /* ── Quality ── */
+    .quality-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem}
+    .quality-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+    .quality-hdr{padding:.55rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .quality-grade{font-size:1.8rem;font-weight:900;font-family:var(--fm)}
+    .qg-ap{color:var(--green)}.qg-a{color:var(--green)}.qg-b{color:var(--amber)}.qg-c{color:var(--blue)}.qg-d{color:var(--text-m)}
+    .quality-stats{font-family:var(--fm);font-size:.62rem;color:var(--text-m);text-align:right}
+    .quality-horses{padding:.6rem 1rem}
+    .qh-row{display:flex;align-items:center;justify-content:space-between;padding:.25rem 0;border-bottom:1px solid var(--border);font-family:var(--fm);font-size:.65rem}
+    .qh-row:last-child{border-bottom:none}
+    .qh-name{color:var(--text-b);font-weight:500}
+    .qh-ev-pos{color:var(--green)}.qh-ev-neg{color:var(--red)}.qh-ev-neu{color:var(--text-m)}
+
+    /* Toast */
+    .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--red-d);
+      color:var(--red);padding:.5rem .85rem;border-radius:6px;font-family:var(--fm);font-size:.65rem;display:none;z-index:300}
+    .toast.visible{display:block}
+
+    @media(max-width:600px){
+      .hdr{padding:0 .8rem}.main{padding:.8rem}.stats-bar{padding:.45rem .8rem;gap:.7rem}
+      .races-grid{grid-template-columns:1fr}.hdr-right .refresh-info{display:none}
+      .rt th:nth-child(n+7),.rt td:nth-child(n+7){display:none}
     }
   </style>
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════════════════════════════ -->
-<!--  HEADER                                                               -->
-<!-- ══════════════════════════════════════════════════════════════════════ -->
-<header class="header">
+<header class="hdr">
   <div class="logo">
     <div class="logo-icon">▲</div>
-    <h1>STEAMER<span>.</span>MON</h1>
+    <h1>STEAM<span>IQ</span></h1>
   </div>
-  <div class="header-right">
-    <span class="refresh-info">Next refresh in <span id="countdown">30</span>s</span>
-    <button class="btn-update" onclick="forceUpdate()">⟳ FORCE UPDATE</button>
-    <div class="live-badge">
-      <div class="live-dot"></div>
-      LIVE
-    </div>
+  <div class="hdr-right">
+    <span class="refresh-info">Refresh in <span id="countdown">60</span>s</span>
+    <button class="btn" onclick="forceUpdate()">⟳ UPDATE</button>
+    <button class="btn" onclick="resetDb()">↺ RESEED</button>
+    <div class="live-badge"><div class="live-dot"></div>LIVE</div>
   </div>
 </header>
 
-<!-- ══════════════════════════════════════════════════════════════════════ -->
-<!--  STATS BAR                                                            -->
-<!-- ══════════════════════════════════════════════════════════════════════ -->
-<div class="stats-bar" id="stats-bar">
-  <div class="stat-item">
-    <span class="stat-label">Runners</span>
-    <span class="stat-value muted" id="stat-runners">{{ summary.total_runners }}</span>
-  </div>
-  <div class="stat-divider"></div>
-  <div class="stat-item">
-    <span class="stat-label">Steamers</span>
-    <span class="stat-value green" id="stat-steamers">{{ summary.steamers }}</span>
-  </div>
-  <div class="stat-divider"></div>
-  <div class="stat-item">
-    <span class="stat-label">Drifters</span>
-    <span class="stat-value red" id="stat-drifters">{{ summary.drifters }}</span>
-  </div>
-  <div class="stat-divider"></div>
-  <div class="stat-item">
-    <span class="stat-label">Smart Money Alerts</span>
-    <span class="stat-value amber" id="stat-smart">{{ summary.smart_money }}</span>
-  </div>
-  <div class="stat-divider"></div>
-  <div class="stat-item">
-    <span class="stat-label">Updated</span>
-    <span class="stat-value muted" style="font-size:.8rem" id="stat-updated">{{ summary.last_updated }}</span>
-  </div>
+<div class="stats-bar">
+  <div class="si"><span class="sl">Runners</span><span class="sv sm" id="s-run">{{ summary.total_runners }}</span></div>
+  <div class="sd"></div>
+  <div class="si"><span class="sl">Steamers</span><span class="sv sg" id="s-stm">{{ summary.steamers }}</span></div>
+  <div class="sd"></div>
+  <div class="si"><span class="sl">Drifters</span><span class="sv sr" id="s-drf">{{ summary.drifters }}</span></div>
+  <div class="sd"></div>
+  <div class="si"><span class="sl">Smart $</span><span class="sv sa" id="s-sm">{{ summary.smart_money }}</span></div>
+  <div class="sd"></div>
+  <div class="si"><span class="sl">Vol Spikes</span><span class="sv sb" id="s-spk">{{ summary.volume_spikes }}</span></div>
+  <div class="sd"></div>
+  <div class="si"><span class="sl">A+ Signals</span><span class="sv sg" id="s-ap">{{ summary.a_plus_count }}</span></div>
+  <div class="sd"></div>
+  <div class="si"><span class="sl">Reversals</span><span class="sv sp" id="s-rv">{{ summary.reversals }}</span></div>
+  <div class="sd"></div>
+  <div class="si"><span class="sl">Top Edge</span><span class="sv sg" id="s-edge">{{ summary.top_edge }}</span></div>
+  <div class="sd"></div>
+  <div class="si"><span class="sl">Updated</span><span class="sv sm" style="font-size:.72rem" id="s-upd">{{ summary.last_updated }}</span></div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════════════════ -->
-<!--  RACE GRID                                                            -->
-<!-- ══════════════════════════════════════════════════════════════════════ -->
-<main class="main">
-  <div class="races-grid" id="races-container">
+<nav class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('dashboard',this)">📊 Dashboard</button>
+  <button class="tab-btn" onclick="switchTab('radar',this)">🔥 Radar</button>
+  <button class="tab-btn" onclick="switchTab('heatmap',this)">🌡 Heatmap</button>
+  <button class="tab-btn" onclick="switchTab('quality',this)">🏆 Quality</button>
+  <button class="tab-btn" onclick="switchTab('strategy',this)">💰 Strategy</button>
+  <button class="tab-btn" onclick="switchTab('backtest',this)">🧪 Backtest</button>
+  <button class="tab-btn" onclick="switchTab('clusters',this)">🔍 Clusters</button>
+  <button class="tab-btn" onclick="switchTab('reversals',this)">↩ Reversals</button>
+  <button class="tab-btn" onclick="switchTab('profiles',this)">👤 Profiles</button>
+  <button class="tab-btn" onclick="switchTab('report',this)">📋 Report</button>
+  <button class="tab-btn" onclick="switchTab('filters',this)">⚙ Filters</button>
+</nav>
 
+<main class="main">
+
+<!-- ── DASHBOARD ── -->
+<div class="tp active" id="tab-dashboard">
+  <div class="races-grid" id="races-container">
     {% for race in races %}
     <div class="race-card" id="race-{{ race.id }}">
-
-      <!-- Race header -->
-      <div class="race-header">
-        <div class="race-venue">
-          <span class="country-flag">{{ '🇮🇪' if race.country == 'IRE' else '🇬🇧' }}</span>
+      <div class="race-hdr">
+        <div style="display:flex;align-items:center;gap:.4rem">
+          <span>{{ '🇮🇪' if race.country == 'IRE' else '🇬🇧' }}</span>
           <div>
             <div class="venue-name">{{ race.venue }}</div>
             <div class="race-meta">{{ race.race_name }} · {{ race.distance }} · {{ race.going }}</div>
           </div>
         </div>
-        {% if race.minutes_to_off <= 5 %}
-          <span class="race-time-badge badge-going">GOING OFF</span>
-        {% elif race.minutes_to_off <= 15 %}
-          <span class="race-time-badge badge-imminent">{{ race.race_time.strftime('%H:%M') }} ⚡</span>
-        {% else %}
-          <span class="race-time-badge badge-normal">{{ race.race_time.strftime('%H:%M') }}</span>
-        {% endif %}
+        {% if race.minutes_to_off <= 5 %}<span class="race-badge badge-going">GOING OFF</span>
+        {% elif race.minutes_to_off <= 15 %}<span class="race-badge badge-imm">{{ race.race_time.strftime('%H:%M') }} ⚡</span>
+        {% else %}<span class="race-badge badge-norm">{{ race.race_time.strftime('%H:%M') }}</span>{% endif %}
       </div>
-
-      <!-- Runners table -->
-      <table class="runners-table">
-        <thead>
-          <tr>
-            <th class="tl-cell"></th>
-            <th>Horse / Jockey</th>
-            <th class="right">Open</th>
-            <th class="right">Now</th>
-            <th class="right">Chg%</th>
-            <th class="right">Conf</th>
-          </tr>
-        </thead>
+      <div class="rt-wrap"><table class="rt">
+        <thead><tr>
+          <th style="width:10px"></th><th>Runner</th>
+          <th class="r">Open</th><th class="r">Now</th><th class="r">Chg%</th>
+          <th class="r">Grade</th><th class="r">Edge</th><th class="r">Conf</th>
+          <th class="r">Vol</th><th>Money</th><th class="r">EV</th><th>Chart</th>
+        </tr></thead>
         <tbody id="tbody-{{ race.id }}">
           {% for horse in race.horses | sort(attribute='current_odds') %}
-          {% set pct = horse.pct_drop %}
-          {% set status = horse.status %}
-          <tr class="{% if horse.is_smart_money_alert %}row-smart{% elif status == 'steam' %}row-steam{% elif status == 'drift' %}row-drift{% endif %}"
-              id="row-{{ horse.id }}">
-
-            <!-- Traffic light -->
-            <td class="tl-cell">
-              {% if status == 'steam' %}
-                <span class="tl tl-green"></span>
-              {% elif status == 'drift' %}
-                <span class="tl tl-red"></span>
-              {% else %}
-                <span class="tl tl-grey"></span>
-              {% endif %}
-            </td>
-
-            <!-- Horse name + jockey -->
+          {% set st = horse.status %}{% set pct = horse.pct_drop %}
+          <tr id="row-{{ horse.id }}"
+              class="{% if horse.is_smart_money_alert %}row-smart{% elif horse.is_drift_reversal %}row-rev{% elif horse.volume_spike %}row-spike{% elif st=='steam' %}row-steam{% elif st=='drift' %}row-drift{% endif %}">
+            <td><span class="tl {% if st=='steam' %}tl-g{% elif st=='drift' %}tl-r{% else %}tl-grey{% endif %}"></span></td>
             <td>
-              <div class="horse-name" id="name-{{ horse.id }}">
-                {{ horse.name }}
-                {% if horse.is_smart_money_alert %}
-                  <span class="smart-badge">SMART $</span>
-                {% endif %}
+              <div class="hname" id="nm-{{ horse.id }}">{{ horse.name }}
+                {% if horse.is_smart_money_alert %}<span class="bdg bdg-sm">SMART $</span>{% endif %}
+                {% if horse.is_fake_steam %}<span class="bdg bdg-fk">⚠ FAKE?</span>{% endif %}
+                {% if horse.volume_spike %}<span class="bdg bdg-sp">SPIKE</span>{% endif %}
+                {% if horse.is_drift_reversal %}<span class="bdg bdg-rv">↩ REV</span>{% endif %}
               </div>
-              <div class="jockey-info">{{ horse.jockey }} · {{ horse.trainer }}</div>
+              <div class="hjinfo">{{ horse.jockey }} · {{ horse.trainer }}</div>
             </td>
-
-            <!-- Opening odds -->
-            <td class="odds-open" id="open-{{ horse.id }}">
-              {{ '%.2f'|format(horse.opening_odds) }}
+            <td class="odds-open" id="op-{{ horse.id }}">{{ '%.2f'|format(horse.opening_odds) }}</td>
+            <td class="odds-cur odds-{{ st }}" id="od-{{ horse.id }}">{{ '%.2f'|format(horse.current_odds) }}</td>
+            <td class="pct-cell {% if pct>0 %}pct-s{% elif pct<0 %}pct-d{% else %}pct-n{% endif %}" id="pc-{{ horse.id }}">
+              {% if pct>0 %}▼{{ '%.1f'|format(pct) }}%{% elif pct<0 %}▲{{ '%.1f'|format(pct|abs) }}%{% else %}—{% endif %}
             </td>
-
-            <!-- Current odds -->
-            <td class="odds-current odds-{{ status }}" id="odds-{{ horse.id }}">
-              {{ '%.2f'|format(horse.current_odds) }}
+            <td id="qi-{{ horse.id }}">
+              {% set q = horse.quality_index %}
+              <span class="qi {% if q=='A+' %}qi-ap{% elif q=='A' %}qi-a{% elif q=='B' %}qi-b{% elif q=='C' %}qi-c{% else %}qi-d{% endif %}">{{ q }}</span>
             </td>
-
-            <!-- % change from open -->
-            <td class="pct-cell {% if pct > 0 %}pct-steam{% elif pct < 0 %}pct-drift{% else %}pct-neutral{% endif %}"
-                id="pct-{{ horse.id }}">
-              {% if pct > 0 %}▼ {{ '%.1f'|format(pct) }}%
-              {% elif pct < 0 %}▲ {{ '%.1f'|format(pct|abs) }}%
-              {% else %}—{% endif %}
+            <td id="eg-{{ horse.id }}">
+              {% set es = horse.edge_score|int %}
+              <span class="edge-badge {% if es>=70 %}edge-hot{% elif es>=40 %}edge-warm{% else %}edge-cold{% endif %}">{{ es }}</span>
             </td>
-
-            <!-- Confidence score -->
-            <td class="confidence-cell" id="conf-{{ horse.id }}">
-              {% set cs = horse.confidence_score %}
-              <div class="conf-bar">
-                <div class="conf-fill {% if cs >= 70 %}conf-fill-high{% elif cs >= 40 %}conf-fill-mid{% else %}conf-fill-low{% endif %}"
-                     style="width: {{ cs }}%"></div>
+            <td id="cf-{{ horse.id }}">
+              {% set cs = horse.conf_score|int %}
+              <div class="conf-wrap">
+                <div class="conf-bar"><div class="conf-fill {% if cs>=70 %}cf-hi{% elif cs>=40 %}cf-mid{% else %}cf-lo{% endif %}" style="width:{{ cs }}%"></div></div>
+                <div class="conf-lbl">{{ cs }}%</div>
               </div>
-              <div class="conf-label">{{ cs }}% · {{ horse.bookie_count }}/5 books</div>
+            </td>
+            <td class="vol-cell {% if horse.volume_spike %}vol-hi{% else %}vol-n{% endif %}" id="vl-{{ horse.id }}">
+              £{{ '{:,}'.format((horse.volume_5min or 0)|int) }}
+            </td>
+            <td id="wm-{{ horse.id }}">
+              <div class="wom-wrap">
+                <div class="wom-bar">
+                  <div class="wom-back" style="width:{{ horse.back_pct }}%"></div>
+                  <div class="wom-lay" style="width:{{ 100 - horse.back_pct }}%"></div>
+                </div>
+                <div class="wom-lbl">
+                  <span style="color:var(--green)">B{{ horse.back_pct|int }}%</span>
+                  <span style="color:var(--red)">L{{ (100-horse.back_pct)|int }}%</span>
+                </div>
+              </div>
+            </td>
+            <td class="{% if horse.ev_score > 0 %}ev-pos{% elif horse.ev_score < 0 %}ev-neg{% else %}ev-neu{% endif %}" id="ev-{{ horse.id }}">
+              {{ '+' if horse.ev_score > 0 else '' }}{{ '%.1f'|format(horse.ev_score) }}%
+            </td>
+            <td>
+              {% set sp = horse.sparkline_data() %}
+              {% if sp %}
+              {% set vals = sp | map(attribute=1) | list %}
+              {% set mn = vals | min %}{% set mx = vals | max %}
+              {% set rng = (mx - mn) if mx != mn else 1 %}
+              <svg class="sparkline" viewBox="0 0 55 22" preserveAspectRatio="none">
+                {% set pts = [] %}
+                {% for i in range(vals|length) %}
+                  {% set x = (i / ((vals|length)-1) * 53 + 1) if vals|length > 1 else 27 %}
+                  {% set y = 21 - ((vals[i] - mn) / rng * 18) - 1 %}
+                  {% if pts.append(x|string + ',' + y|string) %}{% endif %}
+                {% endfor %}
+                <polyline points="{{ pts|join(' ') }}" fill="none"
+                  stroke="{% if pct>0 %}#00e05a{% elif pct<0 %}#ff3b30{% else %}#4a6b50{% endif %}"
+                  stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}
         </tbody>
-      </table>
+      </table></div>
     </div>
     {% endfor %}
+  </div>
+</div>
 
-  </div><!-- /races-grid -->
+<!-- ── RADAR ── -->
+<div class="tp" id="tab-radar">
+  <div style="margin-bottom:.7rem;font-family:var(--fm);font-size:.65rem;color:var(--text-m)">Hot movers in the last 3 minutes · sorted by Edge Score</div>
+  <div class="panel-grid" id="radar-grid"><div class="radar-empty">Loading radar…</div></div>
+</div>
+
+<!-- ── HEATMAP ── -->
+<div class="tp" id="tab-heatmap">
+  <div style="display:flex;gap:.7rem;margin-bottom:.7rem;flex-wrap:wrap;font-family:var(--fm);font-size:.6rem;color:var(--text-m);align-items:center">
+    <span>Steam intensity:</span>
+    <span style="color:var(--green)">■ HOT &gt;20%</span>
+    <span style="color:var(--amber)">■ WARM &gt;10%</span>
+    <span style="color:var(--blue)">■ MILD &gt;3%</span>
+    <span>■ FLAT</span>
+    <span style="color:var(--red)">■ DRIFT</span>
+  </div>
+  <div id="heatmap-container"></div>
+</div>
+
+<!-- ── QUALITY ── -->
+<div class="tp" id="tab-quality">
+  <div style="margin-bottom:.7rem;font-family:var(--fm);font-size:.65rem;color:var(--text-m)">
+    Steam Quality Index — A+ = elite signal · D = noise. Only bet A and A+ grades.
+  </div>
+  <div class="quality-grid" id="quality-grid"><div style="font-family:var(--fm);font-size:.72rem;color:var(--text-m)">Loading…</div></div>
+</div>
+
+<!-- ── STRATEGY ── -->
+<div class="tp" id="tab-strategy">
+  <div style="margin-bottom:.7rem;font-family:var(--fm);font-size:.65rem;color:var(--text-m)">
+    Simulated 1pt back bets — recorded automatically when quality ≥ A
+  </div>
+  <div class="strategy-grid" id="strategy-grid"></div>
+  <div style="font-family:var(--fm);font-size:.65rem;color:var(--text-m);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.06em">Recent Bets</div>
+  <table class="bets-table">
+    <thead><tr><th>Horse</th><th>Venue</th><th>Time</th><th>Odds</th><th>Result</th><th>P/L</th><th>Strategy</th><th>Grade</th></tr></thead>
+    <tbody id="bets-tbody"><tr><td colspan="8" style="text-align:center;color:var(--text-m);padding:2rem;font-family:var(--fm);font-size:.68rem">Loading…</td></tr></tbody>
+  </table>
+</div>
+
+<!-- ── BACKTEST ── -->
+<div class="tp" id="tab-backtest">
+  <div class="bt-controls">
+    <div class="fg-group"><label class="fg-label">Min Edge</label><input class="fg-input" type="number" id="bt-edge" value="0" min="0" max="100" step="5"></div>
+    <div class="fg-group"><label class="fg-label">Min Confidence</label><input class="fg-input" type="number" id="bt-conf" value="0" min="0" max="100" step="5"></div>
+    <div class="fg-group"><label class="fg-label">Quality Grade</label>
+      <select class="fg-select" id="bt-quality">
+        <option value="">Any</option>
+        <option value="A+">A+</option>
+        <option value="A">A</option>
+        <option value="B">B</option>
+      </select>
+    </div>
+    <div class="fg-group" style="justify-content:flex-end;padding-bottom:.3rem">
+      <label class="fg-check"><input type="checkbox" id="bt-spike"> Vol Spike Only</label>
+    </div>
+    <button class="btn" onclick="runBacktest()" style="align-self:flex-end">▶ RUN BACKTEST</button>
+  </div>
+  <div class="bt-results" id="bt-results">
+    <div class="bt-stat"><div class="bt-val sm" id="bt-bets">—</div><div class="bt-lbl">Bets</div></div>
+    <div class="bt-stat"><div class="bt-val sg" id="bt-wins">—</div><div class="bt-lbl">Wins</div></div>
+    <div class="bt-stat"><div class="bt-val sa" id="bt-sr">—</div><div class="bt-lbl">Strike Rate</div></div>
+    <div class="bt-stat"><div class="bt-val" id="bt-roi">—</div><div class="bt-lbl">ROI</div></div>
+    <div class="bt-stat"><div class="bt-val" id="bt-profit">—</div><div class="bt-lbl">Total Profit (pts)</div></div>
+    <div class="bt-stat"><div class="bt-val sr" id="bt-dd">—</div><div class="bt-lbl">Max Drawdown</div></div>
+    <div class="bt-stat"><div class="bt-val sm" id="bt-avgodds">—</div><div class="bt-lbl">Avg Odds</div></div>
+  </div>
+  <div class="curve-wrap">
+    <div class="curve-title">Profit Curve (pts)</div>
+    <canvas id="profit-curve" height="120"></canvas>
+  </div>
+</div>
+
+<!-- ── CLUSTERS ── -->
+<div class="tp" id="tab-clusters">
+  <div style="margin-bottom:.7rem;font-family:var(--fm);font-size:.65rem;color:var(--text-m)">
+    Multiple horses steaming in the same race — signals wrong market, info leak, or syndicate activity
+  </div>
+  <div id="clusters-container"><div style="font-family:var(--fm);font-size:.72rem;color:var(--text-m)">Loading…</div></div>
+</div>
+
+<!-- ── REVERSALS ── -->
+<div class="tp" id="tab-reversals">
+  <div style="margin-bottom:.7rem;font-family:var(--fm);font-size:.65rem;color:var(--text-m)">
+    Horses that first drifted then steamed — classic late informed money arriving after a false market
+  </div>
+  <div id="reversals-container"><div style="font-family:var(--fm);font-size:.72rem;color:var(--text-m)">Loading…</div></div>
+</div>
+
+<!-- ── PROFILES ── -->
+<div class="tp" id="tab-profiles">
+  <div class="profiles-grid" id="profiles-grid"><div style="font-family:var(--fm);font-size:.72rem;color:var(--text-m);padding:2rem">Loading…</div></div>
+</div>
+
+<!-- ── REPORT ── -->
+<div class="tp" id="tab-report">
+  <div class="report-sum" id="report-sum"></div>
+  <table class="rep-table">
+    <thead><tr><th>Horse</th><th>Venue</th><th>Time</th><th>Open</th><th>Flagged @</th><th>Drop%</th><th>Edge</th><th>Result</th></tr></thead>
+    <tbody id="report-tbody"><tr><td colspan="8" style="text-align:center;color:var(--text-m);font-family:var(--fm);font-size:.68rem;padding:2rem">Loading…</td></tr></tbody>
+  </table>
+</div>
+
+<!-- ── FILTERS ── -->
+<div class="tp" id="tab-filters">
+  <div class="filter-bar">
+    <div class="fg-group"><label class="fg-label">Min Drop %</label><input class="fg-input" type="number" id="f-drop" value="0" min="0" max="50"></div>
+    <div class="fg-group"><label class="fg-label">Min Edge</label><input class="fg-input" type="number" id="f-edge" value="0" min="0" max="100" step="5"></div>
+    <div class="fg-group"><label class="fg-label">Min Confidence</label><input class="fg-input" type="number" id="f-conf" value="0" min="0" max="100" step="5"></div>
+    <div class="fg-group"><label class="fg-label">Quality</label>
+      <select class="fg-select" id="f-quality"><option value="">Any</option><option value="A+">A+</option><option value="A">A</option><option value="B">B</option></select>
+    </div>
+    <div class="fg-group"><label class="fg-label">Country</label>
+      <select class="fg-select" id="f-country"><option value="">All</option><option value="GB">🇬🇧 GB</option><option value="IRE">🇮🇪 IRE</option></select>
+    </div>
+    <div class="fg-group" style="justify-content:flex-end;padding-bottom:.3rem">
+      <label class="fg-check"><input type="checkbox" id="f-spike"> Vol Spike Only</label>
+      <label class="fg-check" style="margin-top:.25rem"><input type="checkbox" id="f-late"> Late Money (&lt;20min)</label>
+    </div>
+    <button class="btn" onclick="runFilters()" style="align-self:flex-end">▶ APPLY</button>
+  </div>
+  <div class="filter-results" id="filter-results"><div style="font-family:var(--fm);font-size:.68rem;color:var(--text-m)">Set filters and click Apply.</div></div>
+</div>
+
 </main>
+<div class="toast" id="err-toast">⚠ Connection error — retrying…</div>
 
-<footer class="footer">
-  STEAMER.MON · UK &amp; IRISH RACING · Prices update every 60s · Demo mode active — live scraper falls back to price simulator
-</footer>
-
-<div class="toast" id="error-toast">⚠ Connection error — retrying…</div>
-
-<!-- ══════════════════════════════════════════════════════════════════════ -->
-<!--  JAVASCRIPT — auto-refresh without page reload                        -->
-<!-- ══════════════════════════════════════════════════════════════════════ -->
 <script>
-  /* ── State ──────────────────────────────────────────────────────────── */
-  const REFRESH_INTERVAL = 30;          // seconds between auto-refreshes
-  let   countdown  = REFRESH_INTERVAL;
-  let   oddsCache  = {};                // { horseId: currentOdds } — detect changes
+const REFRESH = 60;
+let countdown = REFRESH;
+let oddsCache = {};
+let activeTab = 'dashboard';
 
-  /* ── Seed cache from initial server-render ──────────────────────────── */
-  document.querySelectorAll('[id^="odds-"]').forEach(el => {
-    const id = el.id.replace('odds-', '');
-    oddsCache[id] = parseFloat(el.textContent.trim());
+document.querySelectorAll('[id^="od-"]').forEach(el => {
+  oddsCache[el.id.replace('od-','')] = parseFloat(el.textContent.trim());
+});
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tp').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  activeTab = name;
+  const loaders = {
+    radar:     loadRadar,    heatmap:  loadHeatmap,
+    quality:   loadQuality,  strategy: loadStrategy,
+    clusters:  loadClusters, reversals:loadReversals,
+    profiles:  loadProfiles, report:   loadReport,
+  };
+  if (loaders[name]) loaders[name]();
+}
+
+const cdEl = document.getElementById('countdown');
+setInterval(() => {
+  countdown--;
+  cdEl.textContent = countdown;
+  if (countdown <= 0) { countdown = REFRESH; refreshAll(); }
+}, 1000);
+
+async function refreshAll() {
+  try {
+    const data = await fetch('/api/races').then(r => r.json());
+    updateStats(data.summary);
+    data.races.forEach(r => updateRace(r));
+    hideErr();
+    const refresh = {radar:loadRadar, heatmap:loadHeatmap, clusters:loadClusters, reversals:loadReversals};
+    if (refresh[activeTab]) refresh[activeTab]();
+  } catch { showErr(); }
+}
+
+async function forceUpdate() {
+  const btn = event.target;
+  btn.textContent = '⟳ UPDATING…'; btn.disabled = true;
+  try {
+    const data = await fetch('/api/simulate', {method:'POST'}).then(r => r.json());
+    updateStats(data.summary);
+    data.races.forEach(r => updateRace(r));
+    countdown = REFRESH;
+    const refresh = {radar:loadRadar, heatmap:loadHeatmap, clusters:loadClusters, reversals:loadReversals};
+    if (refresh[activeTab]) refresh[activeTab]();
+  } catch { showErr(); }
+  finally { btn.textContent = '⟳ UPDATE'; btn.disabled = false; }
+}
+
+async function resetDb() {
+  if (!confirm('Re-seed the database?')) return;
+  await fetch('/api/reset', {method:'POST'});
+  location.reload();
+}
+
+function updateStats(s) {
+  setText('s-run', s.total_runners); setText('s-stm', s.steamers);
+  setText('s-drf', s.drifters);      setText('s-sm',  s.smart_money);
+  setText('s-spk', s.volume_spikes); setText('s-ap',  s.a_plus_count);
+  setText('s-rv',  s.reversals);     setText('s-edge', s.top_edge);
+  setText('s-upd', s.last_updated);
+}
+
+function updateRace(race) {
+  const tbody = document.getElementById(`tbody-${race.id}`);
+  if (!tbody) return;
+  const card = document.getElementById(`race-${race.id}`);
+  if (card) {
+    const badge = card.querySelector('.race-badge');
+    if (badge) {
+      badge.className = 'race-badge';
+      if (race.minutes_to_off <= 5)  { badge.classList.add('badge-going'); badge.textContent = 'GOING OFF'; }
+      else if (race.minutes_to_off <= 15) { badge.classList.add('badge-imm'); badge.textContent = `${race.race_time} ⚡`; }
+      else { badge.classList.add('badge-norm'); badge.textContent = race.race_time; }
+    }
+  }
+  [...race.horses].sort((a,b) => a.current_odds - b.current_odds).forEach(h => {
+    const row = document.getElementById(`row-${h.id}`);
+    if (row) { updateRow(row, h); tbody.appendChild(row); }
   });
+}
 
-  /* ── Countdown ticker ───────────────────────────────────────────────── */
-  const countdownEl = document.getElementById('countdown');
+function updateRow(row, h) {
+  const prev = oddsCache[h.id] || h.current_odds;
+  const changed = Math.abs(h.current_odds - prev) > 0.005;
 
-  setInterval(() => {
-    countdown--;
-    countdownEl.textContent = countdown;
-    if (countdown <= 0) {
-      countdown = REFRESH_INTERVAL;
-      refreshData();
-    }
-  }, 1000);
+  row.className = h.is_smart_money ? 'row-smart'
+                : h.is_drift_reversal ? 'row-rev'
+                : h.volume_spike ? 'row-spike'
+                : h.status === 'steam' ? 'row-steam'
+                : h.status === 'drift' ? 'row-drift' : '';
 
-  /* ── Fetch & render ─────────────────────────────────────────────────── */
-  async function refreshData() {
-    try {
-      const resp = await fetch('/api/races');
-      if (!resp.ok) throw new Error('Server error');
-      const data = await resp.json();
-      updateStats(data.summary);
-      data.races.forEach(race => updateRace(race));
-      hideError();
-    } catch (err) {
-      console.error('[Steamer] Refresh failed:', err);
-      showError();
-    }
+  const tl = row.querySelector('.tl');
+  if (tl) { tl.className = 'tl'; tl.classList.add(h.status==='steam'?'tl-g':h.status==='drift'?'tl-r':'tl-grey'); }
+
+  const nm = document.getElementById(`nm-${h.id}`);
+  if (nm) {
+    nm.textContent = h.name;
+    if (h.is_smart_money)   nm.insertAdjacentHTML('beforeend','<span class="bdg bdg-sm">SMART $</span>');
+    if (h.is_fake_steam)    nm.insertAdjacentHTML('beforeend','<span class="bdg bdg-fk">⚠ FAKE?</span>');
+    if (h.volume_spike)     nm.insertAdjacentHTML('beforeend','<span class="bdg bdg-sp">SPIKE</span>');
+    if (h.is_drift_reversal)nm.insertAdjacentHTML('beforeend','<span class="bdg bdg-rv">↩ REV</span>');
   }
 
-  async function forceUpdate() {
-    const btn = document.querySelector('.btn-update');
-    btn.textContent = '⟳ UPDATING…';
-    btn.disabled = true;
-    try {
-      const resp = await fetch('/api/simulate', { method: 'POST' });
-      const data = await resp.json();
-      updateStats(data.summary);
-      data.races.forEach(race => updateRace(race));
-      countdown = REFRESH_INTERVAL;
-    } catch(err) {
-      showError();
-    } finally {
-      btn.textContent = '⟳ FORCE UPDATE';
-      btn.disabled = false;
-    }
-  }
+  const od = document.getElementById(`od-${h.id}`);
+  if (od) { od.textContent = h.current_odds.toFixed(2); od.className = `odds-cur odds-${h.status}`; if(changed) flashEl(od, h.current_odds < prev ? 'g':'r'); }
 
-  /* ── Update stats bar ───────────────────────────────────────────────── */
-  function updateStats(summary) {
-    setText('stat-runners', summary.total_runners);
-    setText('stat-steamers', summary.steamers);
-    setText('stat-drifters', summary.drifters);
-    setText('stat-smart',    summary.smart_money);
-    setText('stat-updated',  summary.last_updated);
-  }
+  const pc = document.getElementById(`pc-${h.id}`);
+  if (pc) { const p=h.pct_drop; pc.className=`pct-cell ${p>0?'pct-s':p<0?'pct-d':'pct-n'}`; pc.textContent=p>0?`▼${p.toFixed(1)}%`:p<0?`▲${Math.abs(p).toFixed(1)}%`:'—'; }
 
-  /* ── Update a single race card ──────────────────────────────────────── */
-  function updateRace(race) {
-    const tbody = document.getElementById(`tbody-${race.id}`);
-    if (!tbody) return;   // race card not on page yet
+  const qi = document.getElementById(`qi-${h.id}`);
+  if (qi) { const q=h.quality_index; qi.innerHTML=`<span class="qi ${q==='A+'?'qi-ap':q==='A'?'qi-a':q==='B'?'qi-b':q==='C'?'qi-c':'qi-d'}">${q}</span>`; }
 
-    // Update the time badge
-    const card = document.getElementById(`race-${race.id}`);
-    if (card) {
-      const badge = card.querySelector('.race-time-badge');
-      if (badge) {
-        badge.className = 'race-time-badge';
-        if (race.minutes_to_off <= 5) {
-          badge.classList.add('badge-going');
-          badge.textContent = 'GOING OFF';
-        } else if (race.minutes_to_off <= 15) {
-          badge.classList.add('badge-imminent');
-          badge.textContent = `${race.race_time} ⚡`;
-        } else {
-          badge.classList.add('badge-normal');
-          badge.textContent = race.race_time;
-        }
-      }
-    }
+  const eg = document.getElementById(`eg-${h.id}`);
+  if (eg) { const e=Math.round(h.edge_score); eg.innerHTML=`<span class="edge-badge ${e>=70?'edge-hot':e>=40?'edge-warm':'edge-cold'}">${e}</span>`; }
 
-    // Sort horses by current odds (favourites first)
-    const sorted = [...race.horses].sort((a, b) => a.current_odds - b.current_odds);
+  const cf = document.getElementById(`cf-${h.id}`);
+  if (cf) { const cs=Math.round(h.conf_score); cf.innerHTML=`<div class="conf-wrap"><div class="conf-bar"><div class="conf-fill ${cs>=70?'cf-hi':cs>=40?'cf-mid':'cf-lo'}" style="width:${cs}%"></div></div><div class="conf-lbl">${cs}%</div></div>`; }
 
-    // Rebuild tbody rows in new order
-    sorted.forEach(horse => {
-      let row = document.getElementById(`row-${horse.id}`);
+  const vl = document.getElementById(`vl-${h.id}`);
+  if (vl) { vl.textContent=`£${h.volume_5min.toLocaleString()}`; vl.className=`vol-cell ${h.volume_spike?'vol-hi':'vol-n'}`; }
 
-      if (!row) {
-        // New horse — build from scratch (shouldn't happen in normal flow)
-        row = buildRow(horse);
-        tbody.appendChild(row);
-      } else {
-        updateRow(row, horse);
-      }
+  const wm = document.getElementById(`wm-${h.id}`);
+  if (wm) { const bp=h.back_pct; wm.innerHTML=`<div class="wom-wrap"><div class="wom-bar"><div class="wom-back" style="width:${bp}%"></div><div class="wom-lay" style="width:${100-bp}%"></div></div><div class="wom-lbl"><span style="color:var(--green)">B${Math.round(bp)}%</span><span style="color:var(--red)">L${Math.round(100-bp)}%</span></div></div>`; }
 
-      tbody.appendChild(row); // re-orders rows by odds
-    });
-  }
+  const ev = document.getElementById(`ev-${h.id}`);
+  if (ev) { ev.textContent=(h.ev_score>0?'+':'')+h.ev_score.toFixed(1)+'%'; ev.className=h.ev_score>0?'ev-pos':h.ev_score<0?'ev-neg':'ev-neu'; }
 
-  /* ── Update an existing row ─────────────────────────────────────────── */
-  function updateRow(row, horse) {
-    const prevOdds = oddsCache[horse.id] || horse.current_odds;
-    const newOdds  = horse.current_odds;
-    const changed  = Math.abs(newOdds - prevOdds) > 0.005;
+  oddsCache[h.id] = h.current_odds;
+}
 
-    // Row background class
-    row.className = horse.is_smart_money ? 'row-smart'
-                  : horse.status === 'steam' ? 'row-steam'
-                  : horse.status === 'drift' ? 'row-drift'
-                  : '';
+// ── RADAR ─────────────────────────────────────────────────────────────────
+async function loadRadar() {
+  try {
+    const data = await fetch('/api/radar').then(r => r.json());
+    const el = document.getElementById('radar-grid');
+    if (!data.length) { el.innerHTML='<div class="radar-empty">No hot movers in last 3 minutes. Click UPDATE.</div>'; return; }
+    el.innerHTML = data.map(h => `
+      <div class="panel-card">
+        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:${h.volume_spike?'var(--blue)':'var(--green)'}"></div>
+        <div class="pc-title">${h.name}</div>
+        <div class="pc-sub">${h.venue} · ${h.race_time} · ${h.minutes_to_off}m to off</div>
+        <div class="radar-odds">
+          <span class="radar-open">${h.opening_odds.toFixed(2)}</span>
+          <span style="color:var(--green)">→</span>
+          <span class="radar-cur">${h.current_odds.toFixed(2)}</span>
+          <span style="color:var(--green);font-family:var(--fm);font-size:.75rem">▼${h.pct_drop.toFixed(1)}%</span>
+        </div>
+        <div class="pc-stats">
+          <span class="ps-b">Vol: £${h.volume_5min.toLocaleString()}</span>
+          <span class="ps-g">v: ${h.velocity.toFixed(2)}pts/m</span>
+          <span class="ps-g">Conf: ${h.conf_score}%</span>
+          ${h.volume_spike?'<span class="ps-b">⚡ SPIKE</span>':''}
+          ${h.is_drift_reversal?'<span style="color:var(--purple)">↩ REV</span>':''}
+        </div>
+        ${h.is_fake_steam?'<div class="radar-fake">⚠ Possible fake steam</div>':''}
+        <div class="radar-edge">${Math.round(h.edge_score)}</div>
+      </div>`).join('');
+  } catch { showErr(); }
+}
 
-    // Traffic light
-    const tl = row.querySelector('.tl');
-    if (tl) {
-      tl.className = 'tl';
-      tl.classList.add(
-        horse.status === 'steam' ? 'tl-green'
-        : horse.status === 'drift' ? 'tl-red'
-        : 'tl-grey'
-      );
-    }
+// ── HEATMAP ───────────────────────────────────────────────────────────────
+async function loadHeatmap() {
+  try {
+    const data = await fetch('/api/heatmap').then(r => r.json());
+    document.getElementById('heatmap-container').innerHTML = data.map(race => `
+      <div class="hm-race">
+        <div class="hm-hdr">
+          <span class="hm-title">${race.venue} · ${race.race_time}</span>
+          ${race.cluster_count>=2?`<span class="hm-cluster">⚠ ${race.cluster_count} steamers</span>`:''}
+        </div>
+        <div class="hm-grid">
+          ${race.runners.map(h => {
+            const ps=h.pct_drop>0?`▼${h.pct_drop.toFixed(1)}%`:h.pct_drop<0?`▲${Math.abs(h.pct_drop).toFixed(1)}%`:'—';
+            return `<div class="hm-cell hm-${h.tier}" title="${h.name}: ${ps}">
+              <div class="hm-name">${h.name.split(' ').slice(0,2).join(' ')}</div>
+              <div class="hm-pct hm-pct-${h.tier}">${ps}</div>
+              <div class="hm-qi">${h.quality}${h.is_fake?' ⚠':h.is_reversal?' ↩':''}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`).join('');
+  } catch { showErr(); }
+}
 
-    // Horse name + smart money badge
-    const nameEl = document.getElementById(`name-${horse.id}`);
-    if (nameEl) {
-      // Preserve only the text node, re-add badge if needed
-      nameEl.textContent = horse.name;
-      if (horse.is_smart_money) {
-        const badge = document.createElement('span');
-        badge.className = 'smart-badge';
-        badge.textContent = 'SMART $';
-        nameEl.appendChild(badge);
-      }
-    }
+// ── QUALITY ───────────────────────────────────────────────────────────────
+async function loadQuality() {
+  try {
+    const data = await fetch('/api/quality').then(r => r.json());
+    const grades = ['A+','A','B','C','D'];
+    const gradeClass = {'A+':'qg-ap','A':'qg-a','B':'qg-b','C':'qg-c','D':'qg-d'};
+    document.getElementById('quality-grid').innerHTML = grades.map(g => {
+      const d = data[g] || {count:0,avg_edge:0,avg_conf:0,horses:[]};
+      return `<div class="quality-card">
+        <div class="quality-hdr">
+          <span class="quality-grade ${gradeClass[g]}">${g}</span>
+          <div class="quality-stats">
+            <div>${d.count} horses</div>
+            <div>Avg Edge: ${d.avg_edge} · Conf: ${d.avg_conf}%</div>
+          </div>
+        </div>
+        <div class="quality-horses">
+          ${d.horses.length ? d.horses.map(h => `
+            <div class="qh-row">
+              <div>
+                <span class="qh-name">${h.name}</span>
+                <span style="font-family:var(--fm);font-size:.55rem;color:var(--text-m);margin-left:.3rem">${h.venue}</span>
+              </div>
+              <div style="display:flex;gap:.6rem;font-family:var(--fm);font-size:.62rem">
+                <span style="color:var(--green)">▼${h.pct_drop.toFixed(1)}%</span>
+                <span class="${h.ev>0?'qh-ev-pos':h.ev<0?'qh-ev-neg':'qh-ev-neu'}">${h.ev>0?'+':''}${h.ev.toFixed(1)}% EV</span>
+                ${h.reversal?'<span style="color:var(--purple)">↩</span>':''}
+              </div>
+            </div>`).join('')
+          : '<div style="font-family:var(--fm);font-size:.65rem;color:var(--text-m);padding:.5rem 0">No horses at this grade</div>'}
+        </div>
+      </div>`;
+    }).join('');
+  } catch { showErr(); }
+}
 
-    // Odds cells
-    const oddsEl = document.getElementById(`odds-${horse.id}`);
-    if (oddsEl) {
-      oddsEl.textContent = horse.current_odds.toFixed(2);
-      oddsEl.className   = `odds-current odds-${horse.status}`;
+// ── STRATEGY ──────────────────────────────────────────────────────────────
+async function loadStrategy() {
+  try {
+    const data = await fetch('/api/strategy').then(r => r.json());
+    const tagLabel = {
+      all_bets:'All Bets', edge_70:'Edge ≥ 70',
+      quality_A_plus:'Grade A+ Only', volume_spike:'Vol Spike',
+      drift_reversal:'Drift Reversals'
+    };
+    document.getElementById('strategy-grid').innerHTML = data.strategies.map(s => `
+      <div class="strat-card ${s.roi>=0?'positive':'negative'}">
+        <div class="strat-tag">${tagLabel[s.tag]||s.tag}</div>
+        <div class="strat-roi ${s.roi>=0?'pos':'neg'}">${s.roi>=0?'+':''}${s.roi}% ROI</div>
+        <div class="strat-stats">
+          <span class="ps-g">${s.total_profit>=0?'+':''}${s.total_profit} pts</span>
+          <span class="ps-a">${s.strike_rate}% SR</span>
+          <span class="ps-m">${s.bets} bets</span>
+          <span class="ps-r">DD: ${s.max_drawdown}pts</span>
+          <span class="ps-m">Avg odds ${s.avg_odds}</span>
+        </div>
+        <div class="strat-meta"><div>${s.bets} bets placed</div></div>
+      </div>`).join('');
 
-      if (changed) {
-        const direction = newOdds < prevOdds ? 'green' : 'red';
-        flashEl(oddsEl, direction);
-      }
-    }
+    const tbody = document.getElementById('bets-tbody');
+    if (!data.recent_bets.length) { tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text-m);font-family:var(--fm);font-size:.65rem;padding:1.5rem">No bets recorded yet. Click UPDATE to generate activity.</td></tr>'; return; }
+    tbody.innerHTML = data.recent_bets.map(b => `
+      <tr>
+        <td style="color:var(--text-b);font-weight:600">${b.horse}</td>
+        <td style="color:var(--text-m)">${b.venue}</td>
+        <td style="color:var(--text-m)">${b.race_time}</td>
+        <td style="color:var(--text-b)">${b.odds.toFixed(2)}</td>
+        <td class="${b.result==='win'?'r-won':b.result==='loss'?'r-lost':'r-pending'}" style="text-transform:uppercase;font-weight:600">${b.result}</td>
+        <td class="${b.profit>=0?'r-won':'r-lost'}">${b.profit>=0?'+':''}${b.profit.toFixed(2)}</td>
+        <td style="color:var(--text-m)">${tagLabel[b.tag]||b.tag}</td>
+        <td><span class="qi ${b.quality==='A+'?'qi-ap':b.quality==='A'?'qi-a':'qi-b'}">${b.quality}</span></td>
+      </tr>`).join('');
+  } catch { showErr(); }
+}
 
-    // % change
-    const pctEl = document.getElementById(`pct-${horse.id}`);
-    if (pctEl) {
-      const pct = horse.pct_drop;
-      pctEl.className = `pct-cell ${pct > 0 ? 'pct-steam' : pct < 0 ? 'pct-drift' : 'pct-neutral'}`;
-      if (pct > 0)       pctEl.textContent = `▼ ${pct.toFixed(1)}%`;
-      else if (pct < 0)  pctEl.textContent = `▲ ${Math.abs(pct).toFixed(1)}%`;
-      else               pctEl.textContent = '—';
-    }
+// ── BACKTEST ──────────────────────────────────────────────────────────────
+async function runBacktest() {
+  const params = new URLSearchParams({
+    min_edge: document.getElementById('bt-edge').value,
+    min_conf: document.getElementById('bt-conf').value,
+    quality:  document.getElementById('bt-quality').value,
+    volume_spike: document.getElementById('bt-spike').checked,
+  });
+  try {
+    const d = await fetch('/api/backtest?' + params).then(r => r.json());
+    const roi = d.roi >= 0;
+    setText('bt-bets', d.bets);
+    setText('bt-wins', d.wins);
+    setText('bt-sr', d.strike_rate + '%');
+    const roiEl = document.getElementById('bt-roi');
+    roiEl.textContent = (d.roi >= 0 ? '+' : '') + d.roi + '%';
+    roiEl.className = 'bt-val ' + (roi ? 'sg' : 'sr');
+    const profEl = document.getElementById('bt-profit');
+    profEl.textContent = (d.total_profit >= 0 ? '+' : '') + d.total_profit + ' pts';
+    profEl.className = 'bt-val ' + (d.total_profit >= 0 ? 'sg' : 'sr');
+    setText('bt-dd', d.max_drawdown + ' pts');
+    setText('bt-avgodds', d.avg_odds);
+    drawCurve(d.profit_curve);
+  } catch { showErr(); }
+}
 
-    // Confidence bar
-    const confEl = document.getElementById(`conf-${horse.id}`);
-    if (confEl) {
-      const cs  = horse.confidence_score;
-      const fill = confEl.querySelector('.conf-fill');
-      const lbl  = confEl.querySelector('.conf-label');
-      if (fill) {
-        fill.style.width = `${cs}%`;
-        fill.className = `conf-fill ${cs >= 70 ? 'conf-fill-high' : cs >= 40 ? 'conf-fill-mid' : 'conf-fill-low'}`;
-      }
-      if (lbl) lbl.textContent = `${cs}% · ${horse.bookie_count}/5 books`;
-    }
+function drawCurve(curve) {
+  const canvas = document.getElementById('profit-curve');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth || 800;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!curve.length) return;
+  const w = canvas.width, h = canvas.height;
+  const min = Math.min(...curve, 0), max = Math.max(...curve, 0);
+  const range = max - min || 1;
+  const x = i => (i / (curve.length - 1 || 1)) * (w - 20) + 10;
+  const y = v => h - ((v - min) / range) * (h - 20) - 10;
+  // Zero line
+  ctx.strokeStyle = '#2a4530'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, y(0)); ctx.lineTo(w, y(0)); ctx.stroke();
+  // Curve
+  ctx.strokeStyle = curve[curve.length-1] >= 0 ? '#00e05a' : '#ff3b30';
+  ctx.lineWidth = 2; ctx.beginPath();
+  curve.forEach((v, i) => i === 0 ? ctx.moveTo(x(i), y(v)) : ctx.lineTo(x(i), y(v)));
+  ctx.stroke();
+}
 
-    // Update cache
-    oddsCache[horse.id] = newOdds;
-  }
+// ── CLUSTERS ──────────────────────────────────────────────────────────────
+async function loadClusters() {
+  try {
+    const data = await fetch('/api/clusters').then(r => r.json());
+    const el = document.getElementById('clusters-container');
+    if (!data.length) { el.innerHTML='<div style="font-family:var(--fm);font-size:.72rem;color:var(--text-m)">No steam clusters detected. Multiple horses need to steam simultaneously.</div>'; return; }
+    el.innerHTML = data.map(c => `
+      <div class="cluster-card">
+        <div class="cluster-hdr">
+          <div>
+            <div class="cluster-venue">${c.venue} · ${c.race_time}</div>
+            <div style="font-family:var(--fm);font-size:.6rem;color:var(--text-m)">${c.country} · ${c.minutes_to_off}m to off · ${c.cluster_size} steamers</div>
+          </div>
+          <span class="cluster-signal">${c.signal}</span>
+        </div>
+        <div class="cluster-horses">
+          ${c.steamers.map(h => `
+            <div class="ch-pill">
+              ${h.name} <strong>▼${h.pct_drop.toFixed(1)}%</strong>
+              · Edge <strong>${h.edge_score}</strong>
+              · ${h.quality}
+            </div>`).join('')}
+        </div>
+      </div>`).join('');
+  } catch { showErr(); }
+}
 
-  /* ── Flash cell animation ───────────────────────────────────────────── */
-  function flashEl(el, direction) {
-    el.classList.remove('flash-green-anim', 'flash-red-anim');
-    void el.offsetWidth; // reflow to restart animation
-    el.classList.add(direction === 'green' ? 'flash-green-anim' : 'flash-red-anim');
-  }
+// ── REVERSALS ─────────────────────────────────────────────────────────────
+async function loadReversals() {
+  try {
+    const data = await fetch('/api/reversals').then(r => r.json());
+    const el = document.getElementById('reversals-container');
+    if (!data.length) { el.innerHTML='<div style="font-family:var(--fm);font-size:.72rem;color:var(--text-m)">No drift reversals detected yet. Click UPDATE a few times.</div>'; return; }
+    el.innerHTML = data.map(h => `
+      <div class="rev-card">
+        <div>
+          <div class="rev-horse">${h.name}</div>
+          <div class="rev-venue">${h.venue} · ${h.race_time} · ${h.minutes_to_off}m to off</div>
+        </div>
+        <div class="rev-odds">
+          <span class="rev-open">${h.opening_odds.toFixed(2)}</span>
+          <span style="color:var(--purple)">↩</span>
+          <span class="rev-cur">${h.current_odds.toFixed(2)}</span>
+          <span style="color:var(--green);font-family:var(--fm);font-size:.72rem">▼${h.pct_drop.toFixed(1)}%</span>
+        </div>
+        <div class="rev-stats">
+          <span style="color:var(--green)">Edge ${h.edge_score}</span>
+          <span style="color:var(--amber)">Conf ${h.conf_score}%</span>
+          <span style="color:var(--blue)">v ${h.velocity.toFixed(2)}pts/m</span>
+          ${h.volume_spike?'<span style="color:var(--blue)">⚡ SPIKE</span>':''}
+        </div>
+        <div class="rev-qi ${h.quality==='A+'?'sg':h.quality==='A'?'sg':h.quality==='B'?'sa':'sm'}">${h.quality}</div>
+      </div>`).join('');
+  } catch { showErr(); }
+}
 
-  /* ── Helpers ────────────────────────────────────────────────────────── */
-  function setText(id, val) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val;
-  }
+// ── PROFILES ──────────────────────────────────────────────────────────────
+async function loadProfiles() {
+  try {
+    const d = await fetch('/api/profiles').then(r => r.json());
+    const build = (rows, label) => `
+      <div class="profile-section">
+        <div class="profile-hdr">${label}</div>
+        ${rows.map((p,i) => `
+          <div class="profile-row">
+            <span class="pr-rank">${i+1}</span>
+            <div style="flex:1">
+              <div class="pr-name">${p.name}</div>
+              <div class="pr-bar"><div class="pr-bar-fill" style="width:${p.avg_edge}%"></div></div>
+            </div>
+            <div class="pr-stats">
+              <span class="ps-g">Edge ${p.avg_edge}</span>
+              <span class="ps-a">Conf ${p.avg_conf}%</span>
+              <span class="ps-m">${p.steam_count} steamers</span>
+              ${p.a_plus_count>0?`<span class="ps-g">${p.a_plus_count}×A+</span>`:''}
+            </div>
+          </div>`).join('')}
+      </div>`;
+    document.getElementById('profiles-grid').innerHTML = build(d.trainers,'🎩 Trainers') + build(d.jockeys,'🏇 Jockeys');
+  } catch { showErr(); }
+}
 
-  function showError() {
-    document.getElementById('error-toast').classList.add('visible');
-    setTimeout(() => document.getElementById('error-toast').classList.remove('visible'), 4000);
-  }
+// ── REPORT ────────────────────────────────────────────────────────────────
+async function loadReport() {
+  try {
+    const d = await fetch('/api/report').then(r => r.json());
+    const s = d.summary;
+    document.getElementById('report-sum').innerHTML = `
+      <div class="rs"><div class="rs-val sm">${s.total}</div><div class="rs-lbl">Flagged</div></div>
+      <div class="rs"><div class="rs-val sg">${s.won}</div><div class="rs-lbl">Won</div></div>
+      <div class="rs"><div class="rs-val sa">${s.placed}</div><div class="rs-lbl">Placed</div></div>
+      <div class="rs"><div class="rs-val sr">${s.lost}</div><div class="rs-lbl">Lost</div></div>
+      <div class="rs"><div class="rs-val sm">${s.total-s.won-s.placed-s.lost}</div><div class="rs-lbl">Pending</div></div>`;
+    const tbody = document.getElementById('report-tbody');
+    if (!d.results.length) { tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text-m);font-family:var(--fm);font-size:.65rem;padding:2rem">No alerts today yet.</td></tr>'; return; }
+    tbody.innerHTML = d.results.map(r => `<tr>
+      <td style="color:var(--text-b);font-weight:600">${r.horse}</td>
+      <td style="color:var(--text-m)">${r.venue}</td>
+      <td style="color:var(--text-m)">${r.race_time}</td>
+      <td style="color:var(--text-m);text-decoration:line-through">${r.opening_odds.toFixed(2)}</td>
+      <td style="color:var(--text-b)">${r.flagged_odds.toFixed(2)}</td>
+      <td style="color:var(--green)">▼${r.pct_drop.toFixed(1)}%</td>
+      <td><span class="edge-badge ${r.edge_score>=70?'edge-hot':r.edge_score>=40?'edge-warm':'edge-cold'}">${r.edge_score}</span></td>
+      <td class="r-${r.result}" style="font-weight:600;text-transform:uppercase;font-size:.65rem">${r.result}</td>
+    </tr>`).join('');
+  } catch { showErr(); }
+}
 
-  function hideError() {
-    document.getElementById('error-toast').classList.remove('visible');
-  }
+// ── FILTERS ───────────────────────────────────────────────────────────────
+async function runFilters() {
+  const params = new URLSearchParams({
+    min_drop:     document.getElementById('f-drop').value,
+    min_edge:     document.getElementById('f-edge').value,
+    min_conf:     document.getElementById('f-conf').value,
+    quality:      document.getElementById('f-quality').value,
+    country:      document.getElementById('f-country').value,
+    volume_spike: document.getElementById('f-spike').checked,
+    late_only:    document.getElementById('f-late').checked,
+  });
+  try {
+    const data = await fetch('/api/filters?' + params).then(r => r.json());
+    const el = document.getElementById('filter-results');
+    if (!data.length) { el.innerHTML='<div style="font-family:var(--fm);font-size:.68rem;color:var(--text-m)">No horses match these filters.</div>'; return; }
+    el.innerHTML = data.map(h => `
+      <div class="fc">
+        <div class="fc-edge ${h.edge_score>=70?'sg':h.edge_score>=40?'sa':'sm'}">${h.edge_score}</div>
+        <div class="fc-name">${h.name}</div>
+        <div class="fc-venue">${h.venue} · ${h.race_time} · ${h.country} · ${h.mins_to_off}m</div>
+        <div class="fc-stats">
+          <span style="color:var(--green)">▼${h.pct_drop.toFixed(1)}%</span>
+          <span style="color:var(--text-b)">${h.odds.toFixed(2)}</span>
+          <span style="color:var(--amber)">Conf ${h.conf_score}%</span>
+          <span class="qi ${h.quality_index==='A+'?'qi-ap':h.quality_index==='A'?'qi-a':'qi-b'}">${h.quality_index}</span>
+          <span style="color:var(--${h.ev_score>0?'green':'red'})">${h.ev_score>0?'+':''}${h.ev_score.toFixed(1)}% EV</span>
+          ${h.spike?'<span style="color:var(--blue)">⚡</span>':''}
+          ${h.is_reversal?'<span style="color:var(--purple)">↩</span>':''}
+          ${h.is_fake?'<span style="color:var(--red)">⚠ FAKE?</span>':''}
+        </div>
+      </div>`).join('');
+  } catch { showErr(); }
+}
 
-  /* ── Kick off the first refresh immediately on load ─────────────────── */
-  // (The Jinja2 render already shows initial data, so first fetch after 30s)
-  console.log('[Steamer] Dashboard ready. Auto-refresh every', REFRESH_INTERVAL, 'seconds.');
+function flashEl(el, dir) { el.classList.remove('fg','fr'); void el.offsetWidth; el.classList.add(dir==='g'?'fg':'fr'); }
+function setText(id, val) { const e=document.getElementById(id); if(e) e.textContent=val; }
+function showErr() { document.getElementById('err-toast').classList.add('visible'); setTimeout(()=>document.getElementById('err-toast').classList.remove('visible'),4000); }
+function hideErr() { document.getElementById('err-toast').classList.remove('visible'); }
+console.log('[SteamIQ] Ready.');
 </script>
-
 </body>
 </html>
