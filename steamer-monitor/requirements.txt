@@ -1,20 +1,11 @@
-# ── Core ──────────────────────────────────────────────────────────────────
 Flask==3.0.3
 Flask-SQLAlchemy==3.1.1
 SQLAlchemy==2.0.30
-
-# ── Background scheduler ──────────────────────────────────────────────────
 APScheduler==3.10.4
-
-# ── Scraping (BS4 path — lightweight, Render-safe) ────────────────────────
 requests==2.32.3
 beautifulsoup4==4.12.3
-lxml==5.2.2          # faster BS4 parser
+lxml==5.2.2
 fake-useragent==1.5.1
-
-# ── Production server ─────────────────────────────────────────────────────
 gunicorn==22.0.0
-
-# ── Optional: uncomment for Selenium headless scraping ────────────────────
-# selenium==4.21.0
-# webdriver-manager==4.0.1
+betfairlightweight==2.20.0
+python-dotenv==1.0.1
