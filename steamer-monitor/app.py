@@ -8,16 +8,21 @@ Routes:
   GET  /api/heatmap       → steam heatmap
   GET  /api/profiles      → trainer & jockey profiles
   GET  /api/report        → daily steam report
-  GET  /api/filters       → pro filters
+  GET  /api/filters       → pro filters (market + form)
   GET  /api/strategy      → strategy performance tracker
   GET  /api/backtest      → backtesting engine
   GET  /api/clusters      → steam clusters per race
   GET  /api/reversals     → drift reversal detections
   GET  /api/quality       → steam quality index summary
+  GET  /api/exchange      → exchange intelligence feed
+  GET  /api/form          → horse performance intelligence feed
+  GET  /api/pace          → pace projection per race
   GET  /api/timeline/<id> → price timeline for one horse
   POST /api/simulate      → force simulator tick
   POST /api/reset         → reseed database
 """
+from dotenv import load_dotenv
+load_dotenv()
 
 import os
 from datetime import datetime, timedelta
@@ -49,11 +54,18 @@ def scheduled_update():
             print(f"[Scheduler] Scraper: {exc}")
             success = False
         if not success:
-            try:
-                from simulator import simulate_price_movement
-                simulate_price_movement()
-            except Exception as exc:
-                print(f"[Scheduler] Simulator: {exc}")
+            # Only run simulator if Betfair login failed AND real horses exist
+            # Never invent fake races — simulator only updates existing horses
+            from models import Horse as _Horse
+            has_horses = _Horse.query.first() is not None
+            if has_horses:
+                try:
+                    from simulator import simulate_price_movement
+                    simulate_price_movement()
+                except Exception as exc:
+                    print(f"[Scheduler] Simulator: {exc}")
+            else:
+                print("[Scheduler] No races yet — waiting for Betfair credentials.")
 
 
 scheduler = BackgroundScheduler(daemon=True)
@@ -70,15 +82,18 @@ def get_races(limit=5):
 def summary(races):
     all_h   = [h for r in races for h in r.horses]
     return {
-        "total_runners": len(all_h),
-        "steamers":      sum(1 for h in all_h if h.status == "steam"),
-        "drifters":      sum(1 for h in all_h if h.status == "drift"),
-        "smart_money":   sum(1 for h in all_h if h.is_smart_money_alert),
-        "volume_spikes": sum(1 for h in all_h if h.volume_spike),
-        "top_edge":      round(max((h.edge_score for h in all_h), default=0)),
-        "a_plus_count":  sum(1 for h in all_h if h.quality_index == "A+"),
-        "reversals":     sum(1 for h in all_h if h.is_drift_reversal),
-        "last_updated":  datetime.utcnow().strftime("%H:%M:%S"),
+        "total_runners":  len(all_h),
+        "steamers":       sum(1 for h in all_h if h.status == "steam"),
+        "drifters":       sum(1 for h in all_h if h.status == "drift"),
+        "smart_money":    sum(1 for h in all_h if h.is_smart_money_alert),
+        "volume_spikes":  sum(1 for h in all_h if h.volume_spike),
+        "top_edge":       round(max((h.edge_score for h in all_h), default=0)),
+        "a_plus_count":   sum(1 for h in all_h if h.quality_index == "A+"),
+        "reversals":      sum(1 for h in all_h if h.is_drift_reversal),
+        "exchange_leads": sum(1 for h in all_h if h.exchange_behavior == "LEADING"),
+        "diverging":      sum(1 for h in all_h if h.exchange_behavior == "DIVERGING"),
+        "steam_form":     sum(1 for h in all_h if h.steam_form_alert),
+        "last_updated":   datetime.utcnow().strftime("%H:%M:%S"),
     }
 
 
@@ -114,6 +129,10 @@ def api_radar():
         "conf_score": round(h.conf_score or 0), "quality_index": h.quality_index,
         "is_fake_steam": h.is_fake_steam, "is_drift_reversal": h.is_drift_reversal,
         "minutes_to_off": h.race.minutes_to_off,
+        "exchange_price": round(h.exchange_price or h.current_odds, 2),
+        "exchange_lead_score": round(h.exchange_lead_score or 50, 1),
+        "exchange_behavior": h.exchange_behavior or "FOLLOWING",
+        "price_divergence": round(h.price_divergence or 0, 2),
     } for h in hot])
 
 
@@ -175,12 +194,14 @@ def api_report():
     today = datetime.utcnow().strftime("%Y-%m-%d")
     results = (DailySteamResult.query.filter_by(date=today)
                .order_by(DailySteamResult.edge_score.desc()).all())
-    won = sum(1 for r in results if r.result == "won")
-    placed = sum(1 for r in results if r.result == "placed")
-    lost = sum(1 for r in results if r.result == "lost")
+    won     = sum(1 for r in results if r.result == "won")
+    placed  = sum(1 for r in results if r.result == "placed")
+    lost    = sum(1 for r in results if r.result == "lost")
+    pending = sum(1 for r in results if r.result == "pending")
     return jsonify({
         "date": today,
-        "summary": {"total": len(results), "won": won, "placed": placed, "lost": lost},
+        "summary": {"total": len(results), "won": won, "placed": placed,
+                    "lost": lost, "pending": pending},
         "results": [{"horse": r.horse_name, "venue": r.venue, "race_time": r.race_time,
                      "opening_odds": r.opening_odds, "flagged_odds": r.flagged_odds,
                      "pct_drop": round(r.pct_drop, 1), "edge_score": round(r.edge_score),
@@ -188,15 +209,99 @@ def api_report():
     })
 
 
+@app.route("/api/results")
+def api_results():
+    """
+    Real signal performance tracker.
+    Shows today's A+/A flagged horses with their actual Betfair results.
+    This is the ground truth for whether SteamIQ signals work.
+    """
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+
+    # All strategy results from today with real outcomes
+    rows = (StrategyResult.query
+            .filter(StrategyResult.timestamp >= datetime.utcnow().replace(
+                hour=0, minute=0, second=0, microsecond=0))
+            .filter(StrategyResult.strategy_tag == "all_bets")
+            .order_by(StrategyResult.timestamp.desc())
+            .all())
+
+    settled  = [r for r in rows if r.result in ("win", "loss")]
+    pending  = [r for r in rows if r.result == "pending"]
+    winners  = [r for r in settled if r.result == "win"]
+    a_plus   = [r for r in settled if r.quality_index == "A+"]
+    a_grade  = [r for r in settled if r.quality_index == "A"]
+
+    # Strike rates by grade
+    def strike(subset):
+        if not subset: return 0
+        return round(sum(1 for r in subset if r.result == "win") / len(subset) * 100, 1)
+
+    def roi(subset):
+        if not subset: return 0
+        profit = sum(r.profit for r in subset)
+        return round((profit / len(subset)) * 100, 1)
+
+    # Grade breakdown
+    grades = {}
+    for grade in ["A+", "A"]:
+        grp = [r for r in settled if r.quality_index == grade]
+        grades[grade] = {
+            "flagged":     len(grp),
+            "won":         sum(1 for r in grp if r.result == "win"),
+            "lost":        sum(1 for r in grp if r.result == "loss"),
+            "strike_rate": strike(grp),
+            "roi":         roi(grp),
+            "avg_odds":    round(sum(r.odds_taken for r in grp) / len(grp), 2) if grp else 0,
+        }
+
+    return jsonify({
+        "date":     today,
+        "summary": {
+            "total_flagged":  len(rows),
+            "settled":        len(settled),
+            "pending":        len(pending),
+            "won":            len(winners),
+            "lost":           len(settled) - len(winners),
+            "strike_rate":    strike(settled),
+            "roi":            roi(settled),
+            "total_profit":   round(sum(r.profit for r in settled), 2),
+        },
+        "by_grade": grades,
+        "pending_races": [{
+            "horse":      r.horse_name,
+            "venue":      r.venue,
+            "race_time":  r.race_time,
+            "odds":       r.odds_taken,
+            "grade":      r.quality_index,
+            "edge":       round(r.edge_score),
+            "flagged_at": r.timestamp.strftime("%H:%M"),
+        } for r in pending],
+        "settled_races": [{
+            "horse":      r.horse_name,
+            "venue":      r.venue,
+            "race_time":  r.race_time,
+            "odds":       r.odds_taken,
+            "grade":      r.quality_index,
+            "edge":       round(r.edge_score),
+            "result":     r.result,
+            "profit":     round(r.profit, 2),
+            "flagged_at": r.timestamp.strftime("%H:%M"),
+        } for r in settled],
+    })
+
+
 @app.route("/api/filters")
 def api_filters():
-    min_drop   = float(request.args.get("min_drop", 0))
-    min_edge   = float(request.args.get("min_edge", 0))
-    min_conf   = float(request.args.get("min_conf", 0))
-    spike_only = request.args.get("volume_spike", "false").lower() == "true"
-    late_only  = request.args.get("late_only", "false").lower() == "true"
-    quality    = request.args.get("quality", "")
-    country    = request.args.get("country", "").upper()
+    min_drop       = float(request.args.get("min_drop", 0))
+    min_edge       = float(request.args.get("min_edge", 0))
+    min_conf       = float(request.args.get("min_conf", 0))
+    spike_only     = request.args.get("volume_spike", "false").lower() == "true"
+    late_only      = request.args.get("late_only", "false").lower() == "true"
+    quality        = request.args.get("quality", "")
+    country        = request.args.get("country", "").upper()
+    min_suitability = float(request.args.get("min_suitability", 0))
+    steam_form_only = request.args.get("steam_form", "false").lower() == "true"
 
     filtered = []
     for h in Horse.query.join(Race).all():
@@ -207,6 +312,8 @@ def api_filters():
         if late_only and h.race.minutes_to_off > 20: continue
         if quality and h.quality_index != quality:   continue
         if country and h.race.country != country:    continue
+        if h.race_suitability_score < min_suitability: continue
+        if steam_form_only and not h.steam_form_alert: continue
         filtered.append({
             "name": h.name, "venue": h.race.venue,
             "race_time": h.race.race_time.strftime("%H:%M"),
@@ -216,6 +323,11 @@ def api_filters():
             "ev_score": round(h.ev_score or 0, 1), "volume": round(h.volume_5min or 0),
             "spike": h.volume_spike, "mins_to_off": h.race.minutes_to_off,
             "is_fake": h.is_fake_steam, "is_reversal": h.is_drift_reversal,
+            "race_suitability_score": round(h.race_suitability_score),
+            "condition_label":        h.condition_label,
+            "smart_money_rating":     round(h.smart_money_rating),
+            "steam_form_alert":       h.steam_form_alert,
+            "recent_form":            h.recent_form or "",
         })
 
     filtered.sort(key=lambda x: x["edge_score"], reverse=True)
@@ -229,6 +341,8 @@ def api_strategy():
     """
     Strategy Performance Tracker.
     Returns ROI, strike rate, profit, avg odds, max drawdown per tag.
+    Tags include: all_bets, edge_70, quality_A_plus, volume_spike,
+                  drift_reversal, exchange_lead
     Optional ?tag= filter.
     """
     tag_filter = request.args.get("tag", "")
@@ -484,6 +598,136 @@ def api_simulate():
                     "summary": s, "races": [r.to_dict() for r in races]})
 
 
+@app.route("/api/form")
+def api_form():
+    """
+    Horse Performance Intelligence feed.
+    Returns horses sorted by race_suitability_score, with full condition breakdown.
+    Optional filters: ?min_suitability=, ?condition=PERFECT/GOOD/POOR/UNSUITED,
+                      ?steam_form=true (steam_form_alert only)
+    """
+    min_suit    = float(request.args.get("min_suitability", 0))
+    condition   = request.args.get("condition", "").upper()
+    steam_form  = request.args.get("steam_form", "false").lower() == "true"
+
+    horses = Horse.query.join(Race).all()
+    result = []
+    for h in horses:
+        suit = h.race_suitability_score
+        if suit < min_suit:                             continue
+        if condition and h.condition_label != condition: continue
+        if steam_form and not h.steam_form_alert:       continue
+        result.append({
+            "id":                    h.id,
+            "name":                  h.name,
+            "venue":                 h.race.venue,
+            "race_time":             h.race.race_time.strftime("%H:%M"),
+            "minutes_to_off":        h.race.minutes_to_off,
+            "going":                 h.race.going,
+            "distance":              h.race.distance,
+            "pace_projection":       h.race.pace_projection,
+            "current_odds":          round(h.current_odds, 2),
+            "recent_form":           h.recent_form or "",
+            "running_style":         h.running_style or "MIDFIELD",
+            "average_speed_rating":  round(h.average_speed_rating or 0, 1),
+            "form_score":            round(h.form_score),
+            "course_score":          round(h.course_score),
+            "distance_score":        round(h.distance_score),
+            "going_score":           round(h.going_score),
+            "pace_score":            round(h.pace_score),
+            "race_suitability_score": round(suit),
+            "smart_money_rating":    round(h.smart_money_rating),
+            "condition_label":       h.condition_label,
+            "steam_form_alert":      h.steam_form_alert,
+            "edge_score":            round(h.edge_score),
+            "conf_score":            round(h.conf_score or 0),
+            "quality_index":         h.quality_index,
+            "course_wins":           h.course_wins,
+            "course_runs":           h.course_runs,
+            "distance_wins":         h.distance_wins,
+            "distance_runs":         h.distance_runs,
+            "going_wins":            h.going_wins,
+            "going_runs":            h.going_runs,
+        })
+    result.sort(key=lambda x: x["race_suitability_score"], reverse=True)
+    return jsonify(result)
+
+
+@app.route("/api/pace")
+def api_pace():
+    """
+    Pace Projection per race.
+    Returns each race's pace type and all runner pace suitability scores.
+    """
+    races = get_races()
+    result = []
+    for race in races:
+        from collections import Counter
+        styles = Counter(h.running_style or "MIDFIELD" for h in race.horses)
+        result.append({
+            "venue":           race.venue,
+            "race_time":       race.race_time.strftime("%H:%M"),
+            "pace_projection": race.pace_projection,
+            "style_breakdown": dict(styles),
+            "runners": sorted([{
+                "name":          h.name,
+                "running_style": h.running_style or "MIDFIELD",
+                "pace_score":    round(h.pace_score),
+                "current_odds":  round(h.current_odds, 2),
+                "form_score":    round(h.form_score),
+                "race_suitability_score": round(h.race_suitability_score),
+                "condition_label": h.condition_label,
+                "steam_form_alert": h.steam_form_alert,
+            } for h in race.horses], key=lambda x: x["pace_score"], reverse=True),
+        })
+    return jsonify(result)
+
+
+@app.route("/api/exchange")
+def api_exchange():
+    """
+    Exchange Intelligence feed.
+    Returns all horses with exchange data, sorted by exchange_lead_score desc.
+    Optional ?behavior= filter: LEADING / FOLLOWING / DIVERGING
+    Optional ?min_lead= minimum exchange_lead_score
+    """
+    behavior_filter = request.args.get("behavior", "").upper()
+    min_lead = float(request.args.get("min_lead", 0))
+
+    horses = Horse.query.join(Race).all()
+    result = []
+    for h in horses:
+        b = h.exchange_behavior or "FOLLOWING"
+        ls = h.exchange_lead_score or 50.0
+        if behavior_filter and b != behavior_filter:
+            continue
+        if ls < min_lead:
+            continue
+        result.append({
+            "id":                   h.id,
+            "name":                 h.name,
+            "venue":                h.race.venue,
+            "race_time":            h.race.race_time.strftime("%H:%M"),
+            "minutes_to_off":       h.race.minutes_to_off,
+            "country":              h.race.country,
+            "bookie_odds":          round(h.current_odds, 2),
+            "exchange_price":       round(h.exchange_price or h.current_odds, 2),
+            "exchange_lead_score":  round(ls, 1),
+            "exchange_behavior":    b,
+            "price_divergence":     round(h.price_divergence or 0, 2),
+            "pct_drop":             round(h.pct_drop, 1),
+            "edge_score":           round(h.edge_score),
+            "conf_score":           round(h.conf_score or 0),
+            "quality_index":        h.quality_index,
+            "volume_spike":         h.volume_spike,
+            "is_fake_steam":        h.is_fake_steam,
+            "is_drift_reversal":    h.is_drift_reversal,
+        })
+
+    result.sort(key=lambda x: x["exchange_lead_score"], reverse=True)
+    return jsonify(result)
+
+
 @app.route("/api/reset", methods=["POST"])
 def api_reset():
     from seed_db import seed
@@ -492,4 +736,4 @@ def api_reset():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+    app.run(host="0.0.0.0", port=5002, debug=True, use_reloader=False)
