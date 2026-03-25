@@ -1,36 +1,25 @@
-# render.yaml
-# ──────────────────────────────────────────────────────────────────────────
-# Deploy to Render:
-#   1. Push this repo to GitHub
-#   2. New → Web Service → Connect repo
-#   3. Render auto-detects this file and configures everything
-# ──────────────────────────────────────────────────────────────────────────
-
 services:
   - type: web
-    name: steamer-monitor
+    name: steamiq
     env: python
-    region: frankfurt   # closest to UK/Ireland
-    plan: free          # upgrade to starter for persistent disk
+    region: frankfurt
+    plan: free
 
     buildCommand: pip install -r requirements.txt && python seed_db.py
     startCommand: gunicorn app:app --workers 1 --threads 2 --timeout 120
 
     envVars:
       - key: SECRET_KEY
-        generateValue: true   # Render auto-generates a secure random value
+        generateValue: true
       - key: FLASK_ENV
         value: production
       - key: PYTHON_VERSION
         value: "3.11.0"
+      - key: BETFAIR_APP_KEY
+        sync: false
+      - key: BETFAIR_USERNAME
+        sync: false
+      - key: BETFAIR_PASSWORD
+        sync: false
+```
 
-    # ── NOTE on SQLite + Render free tier ──────────────────────────────
-    # The free tier has an ephemeral filesystem — the SQLite DB resets on
-    # each deploy.  seed_db.py in buildCommand handles this automatically.
-    #
-    # For persistent data across deploys:
-    #   1. Upgrade to Render Starter ($7/mo) and add a Disk mount at /opt/render/project/src/
-    #   2. OR swap SQLite for Render's managed Postgres (free 90-day trial):
-    #        pip install psycopg2-binary
-    #        Change SQLALCHEMY_DATABASE_URI to the Render Postgres URL
-    # ────────────────────────────────────────────────────────────────────
