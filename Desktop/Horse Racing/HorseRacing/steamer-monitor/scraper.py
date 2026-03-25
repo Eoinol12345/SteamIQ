@@ -2,12 +2,16 @@
 scraper.py — Betfair Exchange Live Scraper
 ==========================================
 Uses direct HTTP requests to the Betfair API.
-No SSL certificates required. Works on Mac, Linux, and Render.
+Certificate login required for server deployments (Render).
 
 Set these in your .env file or Render environment variables:
-  BETFAIR_APP_KEY  = VzkuojquWnflpREV
+  BETFAIR_APP_KEY  = your app key
   BETFAIR_USERNAME = your Betfair email
   BETFAIR_PASSWORD = your Betfair password
+
+Certificate files (required for Render):
+  client-cert.pem — upload to Betfair developer portal
+  client-key.pem  — keep private, never share
 """
 
 import os
@@ -17,7 +21,7 @@ import statistics
 from datetime import datetime, timedelta
 from models import db, Race, Horse, OddsHistory, DailySteamResult, StrategyResult
 
-APP_KEY  = os.environ.get("BETFAIR_APP_KEY",  "VzkuojquWnflpREV")
+APP_KEY  = os.environ.get("BETFAIR_APP_KEY",  "")
 USERNAME = os.environ.get("BETFAIR_USERNAME", "")
 PASSWORD = os.environ.get("BETFAIR_PASSWORD", "")
 
@@ -32,8 +36,9 @@ _token_expiry  = None
 
 def _login():
     """
-    Login using Betfair's non-certificate endpoint.
-    Works without SSL client certificates.
+    Login to Betfair.
+    Uses certificate login when cert files are present (required for Render).
+    Falls back to standard login for local development from a known IP.
     """
     global _session_token, _token_expiry
 
@@ -44,16 +49,40 @@ def _login():
         print("[Scraper] BETFAIR_USERNAME / BETFAIR_PASSWORD not set in environment.")
         return None
 
-    # Try the standard non-certificate endpoint first
-    endpoints = [
-        "https://identitysso.betfair.com/api/login",
-        "https://identitysso-cert.betfair.com/api/login",
-    ]
+    # Check for certificate files
+    base_dir  = os.path.dirname(os.path.abspath(__file__))
+    cert_path = os.path.join(base_dir, "client-cert.pem")
+    key_path  = os.path.join(base_dir, "client-key.pem")
+    use_cert  = os.path.exists(cert_path) and os.path.exists(key_path)
 
-    for url in endpoints:
-        try:
+    try:
+        if use_cert:
+            # Certificate login — works from any IP including Render servers
             resp = requests.post(
-                url,
+                "https://identitysso-cert.betfair.com/api/certlogin",
+                data={"username": USERNAME, "password": PASSWORD},
+                headers={
+                    "X-Application": APP_KEY,
+                    "Content-Type":  "application/x-www-form-urlencoded",
+                },
+                cert=(cert_path, key_path),
+                timeout=15,
+            )
+            data   = resp.json()
+            token  = data.get("sessionToken")
+            status = data.get("loginStatus")
+            if token and status == "SUCCESS":
+                _session_token = token
+                _token_expiry  = datetime.utcnow() + timedelta(hours=3, minutes=30)
+                print("[Scraper] Betfair login OK (certificate)")
+                return _session_token
+            print(f"[Scraper] Certificate login failed: {status}")
+            return None
+
+        else:
+            # Standard login — only works from a recognised/whitelisted IP
+            resp = requests.post(
+                "https://identitysso.betfair.com/api/login",
                 data={"username": USERNAME, "password": PASSWORD},
                 headers={
                     "X-Application":  APP_KEY,
@@ -62,30 +91,22 @@ def _login():
                 },
                 timeout=15,
             )
-
-            # Check we got JSON back
             if not resp.text or resp.text.strip().startswith("<"):
-                print(f"[Scraper] {url} returned HTML — trying next endpoint.")
-                continue
-
+                print("[Scraper] Standard login returned HTML — IP not whitelisted. "
+                      "Add client-cert.pem and client-key.pem to project root.")
+                return None
             data = resp.json()
-
             if data.get("status") == "SUCCESS" and data.get("token"):
                 _session_token = data["token"]
                 _token_expiry  = datetime.utcnow() + timedelta(hours=3, minutes=30)
-                print(f"[Scraper] Betfair login OK via {url}")
+                print("[Scraper] Betfair login OK (standard)")
                 return _session_token
+            print(f"[Scraper] Standard login failed: {data.get('error', 'unknown')}")
+            return None
 
-            error = data.get("error", "unknown")
-            print(f"[Scraper] Login failed at {url}: {error}")
-
-        except requests.exceptions.RequestException as e:
-            print(f"[Scraper] Request error at {url}: {e}")
-        except Exception as e:
-            print(f"[Scraper] Error at {url}: {e}")
-
-    print("[Scraper] All login endpoints failed.")
-    return None
+    except Exception as e:
+        print(f"[Scraper] Login error: {e}")
+        return None
 
 
 def _api(token, method, params):
